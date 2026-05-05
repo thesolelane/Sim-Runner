@@ -1,0 +1,22 @@
+{
+  "name": "cooperanth-sim-runner",
+  "version": "1.0.0",
+  "description": "Universal Owner Simulator for any app",
+  "type": "module",
+  "scripts": {
+    "test:contractor": "node run.js traydbook contractor",
+    "test:owner": "node run.js traydbook owner",
+    "test:agent": "node run.js traydbook agent",
+    "test:homeowner": "node run.js traydbook homeowner",
+    "test:investor": "node run.js traydbook investor",
+    "test:headed": "node run.js traydbook contractor --headed",
+    "test:all": "npm run test:contractor && npm run test:owner && npm run test:agent && npm run test:homeowner && npm run test:investor",
+    "install:playwright": "npx playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
