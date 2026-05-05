@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  CreateRunBody,
   CreateSimulationBody,
   ErrorResponse,
   HealthStatus,
@@ -788,11 +789,14 @@ export const getCreateRunUrl = (id: number) => {
 
 export const createRun = async (
   id: number,
+  createRunBody?: CreateRunBody,
   options?: RequestInit,
 ): Promise<SimulationRun> => {
   return customFetch<SimulationRun>(getCreateRunUrl(id), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createRunBody),
   });
 };
 
@@ -803,14 +807,14 @@ export const getCreateRunMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createRun>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<CreateRunBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof createRun>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<CreateRunBody> },
   TContext
 > => {
   const mutationKey = ["createRun"];
@@ -824,11 +828,11 @@ export const getCreateRunMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof createRun>>,
-    { id: number }
+    { id: number; data: BodyType<CreateRunBody> }
   > = (props) => {
-    const { id } = props ?? {};
+    const { id, data } = props ?? {};
 
-    return createRun(id, requestOptions);
+    return createRun(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -837,7 +841,7 @@ export const getCreateRunMutationOptions = <
 export type CreateRunMutationResult = NonNullable<
   Awaited<ReturnType<typeof createRun>>
 >;
-
+export type CreateRunMutationBody = BodyType<CreateRunBody>;
 export type CreateRunMutationError = ErrorType<ErrorResponse>;
 
 /**
@@ -850,14 +854,14 @@ export const useCreateRun = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createRun>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<CreateRunBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof createRun>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<CreateRunBody> },
   TContext
 > => {
   return useMutation(getCreateRunMutationOptions(options));

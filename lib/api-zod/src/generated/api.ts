@@ -33,6 +33,22 @@ export const ScanUrlResponse = zod.object({
       description: zod.string(),
       fields: zod.array(zod.string()),
       stepType: zod.string(),
+      confidence: zod
+        .string()
+        .describe("Confidence level: high, medium, or low"),
+      selector: zod
+        .string()
+        .describe(
+          "Best candidate CSS\/text selector for this step's primary element",
+        ),
+      candidateSelectors: zod
+        .array(zod.string())
+        .describe("All candidate selectors found for this step"),
+      actionType: zod
+        .string()
+        .describe(
+          "Suggested action: navigate, click, fill, waitForText, selectOption",
+        ),
     }),
   ),
   confidence: zod.string(),
@@ -55,6 +71,8 @@ export const GetSimulationStatsResponse = zod.object({
       passedSteps: zod.number(),
       failedSteps: zod.number(),
       durationMs: zod.number().nullable(),
+      headedMode: zod.boolean(),
+      videoPath: zod.string().nullable(),
       startedAt: zod.string(),
       completedAt: zod.string().nullable(),
     }),
@@ -77,6 +95,10 @@ export const ListSimulationsResponseItem = zod.object({
       description: zod.string(),
       fields: zod.array(zod.string()),
       stepType: zod.string(),
+      selector: zod.string().optional(),
+      actionType: zod.string().optional(),
+      confidence: zod.string().optional(),
+      candidateSelectors: zod.array(zod.string()).optional(),
     }),
   ),
   totalRuns: zod.number(),
@@ -102,6 +124,10 @@ export const CreateSimulationBody = zod.object({
       description: zod.string(),
       fields: zod.array(zod.string()),
       stepType: zod.string(),
+      selector: zod.string().optional(),
+      actionType: zod.string().optional(),
+      confidence: zod.string().optional(),
+      candidateSelectors: zod.array(zod.string()).optional(),
     }),
   ),
 });
@@ -126,6 +152,10 @@ export const GetSimulationResponse = zod.object({
       description: zod.string(),
       fields: zod.array(zod.string()),
       stepType: zod.string(),
+      selector: zod.string().optional(),
+      actionType: zod.string().optional(),
+      confidence: zod.string().optional(),
+      candidateSelectors: zod.array(zod.string()).optional(),
     }),
   ),
   totalRuns: zod.number(),
@@ -155,6 +185,10 @@ export const UpdateSimulationBody = zod.object({
         description: zod.string(),
         fields: zod.array(zod.string()),
         stepType: zod.string(),
+        selector: zod.string().optional(),
+        actionType: zod.string().optional(),
+        confidence: zod.string().optional(),
+        candidateSelectors: zod.array(zod.string()).optional(),
       }),
     )
     .optional(),
@@ -173,6 +207,10 @@ export const UpdateSimulationResponse = zod.object({
       description: zod.string(),
       fields: zod.array(zod.string()),
       stepType: zod.string(),
+      selector: zod.string().optional(),
+      actionType: zod.string().optional(),
+      confidence: zod.string().optional(),
+      candidateSelectors: zod.array(zod.string()).optional(),
     }),
   ),
   totalRuns: zod.number(),
@@ -204,6 +242,8 @@ export const ListRunsResponseItem = zod.object({
   passedSteps: zod.number(),
   failedSteps: zod.number(),
   durationMs: zod.number().nullable(),
+  headedMode: zod.boolean(),
+  videoPath: zod.string().nullable(),
   startedAt: zod.string(),
   completedAt: zod.string().nullable(),
 });
@@ -214,6 +254,13 @@ export const ListRunsResponse = zod.array(ListRunsResponseItem);
  */
 export const CreateRunParams = zod.object({
   id: zod.coerce.number(),
+});
+
+export const CreateRunBody = zod.object({
+  headedMode: zod
+    .boolean()
+    .optional()
+    .describe("Run in headed mode and record a video"),
 });
 
 /**
@@ -232,6 +279,8 @@ export const GetRunResponse = zod.object({
   passedSteps: zod.number(),
   failedSteps: zod.number(),
   durationMs: zod.number().nullable(),
+  headedMode: zod.boolean(),
+  videoPath: zod.string().nullable(),
   startedAt: zod.string(),
   completedAt: zod.string().nullable(),
   stepResults: zod.array(
@@ -242,6 +291,18 @@ export const GetRunResponse = zod.object({
       durationMs: zod.number(),
       generatedData: zod.record(zod.string(), zod.unknown()),
       errorMessage: zod.string().nullable(),
+      screenshot: zod
+        .string()
+        .nullish()
+        .describe("Base64-encoded PNG screenshot captured on failure"),
+      selectorUsed: zod
+        .string()
+        .nullish()
+        .describe("The selector that was used to find the element"),
+      actionTaken: zod
+        .string()
+        .nullish()
+        .describe("Description of the action performed"),
     }),
   ),
 });

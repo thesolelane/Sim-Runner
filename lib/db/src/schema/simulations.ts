@@ -14,6 +14,10 @@ export const simulationsTable = pgTable("simulations", {
     description: string;
     fields: string[];
     stepType: string;
+    selector?: string;
+    actionType?: string;
+    confidence?: string;
+    candidateSelectors?: string[];
   }>>(),
   totalRuns: integer("total_runs").notNull().default(0),
   lastRunStatus: text("last_run_status"),

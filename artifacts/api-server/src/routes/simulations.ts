@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, avg, count, sql } from "drizzle-orm";
 import { db, simulationsTable, simulationRunsTable } from "@workspace/db";
+import { chromium } from "playwright";
 import {
   ScanUrlBody,
   CreateSimulationBody,
@@ -8,91 +9,636 @@ import {
   GetSimulationParams,
   UpdateSimulationParams,
   DeleteSimulationParams,
+  CreateRunBody,
 } from "@workspace/api-zod";
+import { runSimulation, NIX_LIB_PATHS } from "../lib/engine";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-function generateFakeData(fields: string[]): Record<string, unknown> {
-  const fakeValues: Record<string, unknown> = {};
-  for (const field of fields) {
-    const f = field.toLowerCase();
-    if (f.includes("email")) fakeValues[field] = `testuser_${Date.now()}@example.com`;
-    else if (f.includes("password")) fakeValues[field] = "Sim@12345!";
-    else if (f.includes("name") && f.includes("first")) fakeValues[field] = "Alex";
-    else if (f.includes("name") && f.includes("last")) fakeValues[field] = "Simrunner";
-    else if (f.includes("name")) fakeValues[field] = "Alex Simrunner";
-    else if (f.includes("phone")) fakeValues[field] = "+1-555-000-1234";
-    else if (f.includes("dob") || f.includes("birth")) fakeValues[field] = "1990-06-15";
-    else if (f.includes("username")) fakeValues[field] = `user_${Date.now()}`;
-    else if (f.includes("zip") || f.includes("postal")) fakeValues[field] = "10001";
-    else if (f.includes("city")) fakeValues[field] = "New York";
-    else if (f.includes("country")) fakeValues[field] = "United States";
-    else if (f.includes("address")) fakeValues[field] = "123 Test Street";
-    else fakeValues[field] = `test_${field}_value`;
+const PLAYWRIGHT_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-blink-features=AutomationControlled",
+];
+
+const PLAYWRIGHT_ENV = {
+  ...process.env,
+  LD_LIBRARY_PATH: [process.env.LD_LIBRARY_PATH, NIX_LIB_PATHS].filter(Boolean).join(":"),
+};
+
+type ConfidenceLevel = "high" | "medium" | "low";
+
+interface ExtractedElement {
+  tag: string;
+  type?: string;
+  name?: string;
+  id?: string;
+  placeholder?: string;
+  text?: string;
+  href?: string;
+  role?: string;
+  ariaLabel?: string;
+  cssSelector: string;
+}
+
+interface DetectedStepInternal {
+  order: number;
+  name: string;
+  description: string;
+  fields: string[];
+  stepType: string;
+  confidence: ConfidenceLevel;
+  selector: string;
+  candidateSelectors: string[];
+  actionType: string;
+}
+
+const PRIVATE_HOST_RE =
+  /^(localhost|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|0\.0\.0\.0|::1|fd[0-9a-f]{2}:)$/i;
+
+function validateScanUrl(raw: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return "Invalid URL format";
   }
-  return fakeValues;
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    return "Only http and https URLs are allowed";
+  }
+  if (PRIVATE_HOST_RE.test(parsed.hostname)) {
+    return "Internal network addresses are not allowed";
+  }
+  return null;
+}
+
+function scoreConfidence(matchCount: number, total: number): ConfidenceLevel {
+  const ratio = total > 0 ? matchCount / total : 0;
+  if (ratio >= 0.6) return "high";
+  if (ratio >= 0.3) return "medium";
+  return "low";
+}
+
+function buildSelector(el: ExtractedElement): string {
+  if (el.id) return `#${el.id}`;
+  if (el.name) return `${el.tag}[name="${el.name}"]`;
+  if (el.placeholder) return `${el.tag}[placeholder="${el.placeholder}"]`;
+  if (el.type && el.tag === "input") return `input[type="${el.type}"]`;
+  if (el.text && (el.tag === "button" || el.tag === "a")) return `${el.tag}:has-text("${el.text}")`;
+  return el.cssSelector;
 }
 
 async function detectStepsFromUrl(url: string, appName: string) {
-  const detected: Array<{
-    order: number;
-    name: string;
-    description: string;
-    fields: string[];
-    stepType: string;
-  }> = [];
+  let browser = null;
+  let context = null;
 
   try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "Cooperanth-Sim-Runner/1.0 (flow-scanner)" },
-      signal: AbortSignal.timeout(8000),
+    browser = await chromium.launch({ headless: true, args: PLAYWRIGHT_ARGS, env: PLAYWRIGHT_ENV });
+    context = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      viewport: { width: 1280, height: 800 },
+    });
+    const page = await context.newPage();
+
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+
+    const pageText = await page.evaluate(
+      () => ((document as unknown as { body: { innerText: string } }).body.innerText ?? "").toLowerCase(),
+    );
+
+    /* Accessibility tree analysis.
+     * page.accessibility was deprecated in Playwright v1.8 and its type declarations
+     * were subsequently removed; however the runtime API remains present in current
+     * Playwright builds. We call it through a narrowly-scoped cast, with a typed
+     * locator-based fallback when it returns nothing (e.g., blank/protected pages). */
+    type AxNode = { role?: string; name?: string; children?: AxNode[] };
+    type AxPage = typeof page & { accessibility: { snapshot(): Promise<AxNode | null> } };
+    const axPage = page as AxPage;
+
+    const axNodes: Array<{ role: string; name: string }> = [];
+    const snapshot = await axPage.accessibility.snapshot().catch(() => null);
+    if (snapshot) {
+      const walkSnapshot = (node: AxNode): void => {
+        if (!node) return;
+        if (node.role && node.role !== "generic" && node.role !== "none") {
+          axNodes.push({ role: node.role, name: (node.name ?? "").toLowerCase() });
+        }
+        if (Array.isArray(node.children)) node.children.forEach(walkSnapshot);
+      };
+      walkSnapshot(snapshot);
+    }
+
+    /* Supplement with typed locator queries for signals the snapshot may miss
+     * (e.g., password inputs whose role is reported as "textbox" without name) */
+    const [axEmailCount, axPasswordCount, axSignupBtnCount, axPhoneCount,
+           axOtpCount, axCheckboxCount, axRadioCount, axPlanBtnCount] = await Promise.all([
+      page.getByRole("textbox", { name: /email|e-mail/i }).count(),
+      page.locator('input[type="password"]').count(),
+      page.getByRole("button", { name: /sign.?up|register|create.?account|get.?started/i }).count(),
+      page.getByRole("textbox", { name: /phone|mobile/i }).count(),
+      page.getByRole("textbox", { name: /code|otp|verif/i }).count(),
+      page.getByRole("checkbox").count(),
+      page.getByRole("radio").count(),
+      page.getByRole("button", { name: /\bplan\b|\bpro\b|\bfree\b|\bbasic\b/i }).count(),
+    ]);
+
+    const axHasEmail = axEmailCount > 0 ||
+      axNodes.some((n) => n.role === "textbox" && (n.name.includes("email") || n.name.includes("e-mail")));
+    const axHasPassword = axPasswordCount > 0 ||
+      axNodes.some((n) => n.name.includes("password"));
+    const axHasSignupBtn = axSignupBtnCount > 0 ||
+      axNodes.some((n) => n.role === "button" &&
+        (n.name.includes("sign up") || n.name.includes("register") ||
+         n.name.includes("create account") || n.name.includes("get started")));
+    const axHasPhone = axPhoneCount > 0 ||
+      axNodes.some((n) => n.role === "textbox" && (n.name.includes("phone") || n.name.includes("mobile")));
+    const axHasOtp = axOtpCount > 0 ||
+      axNodes.some((n) => n.role === "textbox" && (n.name.includes("code") || n.name.includes("otp") || n.name.includes("verif")));
+    const axHasCheckbox = axCheckboxCount > 0 ||
+      axNodes.some((n) => n.role === "checkbox");
+    const axHasPlanBtn = axRadioCount > 0 || axPlanBtnCount > 0 ||
+      axNodes.some((n) => n.role === "radio" ||
+        (n.role === "button" && (n.name.includes("plan") || n.name.includes("pro") || n.name.includes("free"))));
+
+    const elements: ExtractedElement[] = await page.evaluate((): ExtractedElement[] => {
+      const results: ExtractedElement[] = [];
+      const seen = new Set<string>();
+
+      const getCssSelector = (el: Element): string => {
+        const htmlEl = el as HTMLElement;
+        if (htmlEl.id) return `#${htmlEl.id}`;
+        const tag = el.tagName.toLowerCase();
+        const parent = el.parentElement;
+        if (!parent) return tag;
+        const siblings = Array.from(parent.children).filter(
+          (c) => c.tagName === el.tagName,
+        );
+        const idx = siblings.indexOf(el);
+        return `${tag}${idx > 0 ? `:nth-of-type(${idx + 1})` : ""}`;
+      };
+
+      const addEl = (el: Element) => {
+        const htmlEl = el as HTMLElement & { type?: string; name?: string; placeholder?: string; href?: string };
+        const cssSelector = getCssSelector(el);
+        const key = `${el.tagName}:${cssSelector}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        results.push({
+          tag: el.tagName.toLowerCase(),
+          type: htmlEl.type || undefined,
+          name: htmlEl.name || undefined,
+          id: htmlEl.id || undefined,
+          placeholder: htmlEl.placeholder || undefined,
+          text: htmlEl.innerText?.trim().slice(0, 80) || undefined,
+          href: htmlEl.href || undefined,
+          role: el.getAttribute("role") || undefined,
+          ariaLabel: el.getAttribute("aria-label") || undefined,
+          cssSelector,
+        });
+      };
+
+      document.querySelectorAll("input").forEach(addEl);
+      document.querySelectorAll("button").forEach(addEl);
+      document.querySelectorAll("select").forEach(addEl);
+      document.querySelectorAll("textarea").forEach(addEl);
+      document.querySelectorAll("a[href]").forEach(addEl);
+      document.querySelectorAll("[role='button']").forEach(addEl);
+      document.querySelectorAll("[role='checkbox']").forEach(addEl);
+
+      return results;
     });
 
-    const html = await response.text();
-    const lower = html.toLowerCase();
+    const inputs = elements.filter((e) => e.tag === "input" && e.type !== "hidden");
+    const buttons = elements.filter((e) => e.tag === "button" || e.role === "button");
+    const selects = elements.filter((e) => e.tag === "select");
+    const checkboxes = elements.filter((e) => e.type === "checkbox");
+    const passwordInputs = inputs.filter((e) => e.type === "password");
+    const emailInputs = inputs.filter(
+      (e) =>
+        e.type === "email" ||
+        e.name?.toLowerCase().includes("email") ||
+        e.id?.toLowerCase().includes("email") ||
+        e.placeholder?.toLowerCase().includes("email"),
+    );
+    const textInputs = inputs.filter((e) => !e.type || e.type === "text");
 
-    const patterns = [
-      { name: "Account Creation", keywords: ["create account", "sign up", "register", "get started"], fields: ["Email", "Password", "Confirm Password"], stepType: "form" },
-      { name: "Email Verification", keywords: ["verify email", "confirm email", "check your email", "verification code"], fields: ["Verification Code"], stepType: "verification" },
-      { name: "Profile Setup", keywords: ["profile", "about you", "personal info", "first name", "last name"], fields: ["First Name", "Last Name", "Username"], stepType: "form" },
-      { name: "Phone Verification", keywords: ["phone", "mobile", "sms", "text message"], fields: ["Phone Number", "SMS Code"], stepType: "verification" },
-      { name: "Plan Selection", keywords: ["plan", "pricing", "subscription", "choose your", "select a plan"], fields: ["Selected Plan"], stepType: "selection" },
-      { name: "Payment Details", keywords: ["payment", "billing", "credit card", "card number"], fields: ["Card Number", "Expiry", "CVV", "Billing Address"], stepType: "form" },
-      { name: "Permissions & Consent", keywords: ["terms", "privacy", "agree", "consent", "cookie"], fields: ["Terms Accepted"], stepType: "consent" },
-      { name: "App Configuration", keywords: ["configure", "customize", "set up", "preferences", "workspace"], fields: ["App Name", "Industry", "Team Size"], stepType: "form" },
-      { name: "Invite Team", keywords: ["invite", "team member", "collaborator", "add member"], fields: ["Invitee Email"], stepType: "form" },
-      { name: "Completion", keywords: ["welcome", "all set", "you're ready", "get started", "dashboard"], fields: [], stepType: "confirmation" },
-    ];
-
+    const detected: DetectedStepInternal[] = [];
     let order = 1;
-    for (const pattern of patterns) {
-      if (pattern.keywords.some((kw) => lower.includes(kw))) {
-        detected.push({ order: order++, ...pattern });
+
+    const hasSignupKeywords = ["sign up", "register", "create account", "get started", "join"].some(
+      (kw) => pageText.includes(kw),
+    );
+    const hasLoginKeywords = ["log in", "sign in", "login", "signin"].some((kw) =>
+      pageText.includes(kw),
+    );
+
+    if (emailInputs.length > 0 || passwordInputs.length > 0 || axHasEmail || axHasPassword) {
+      const fields: string[] = [];
+      const candidateSelectors: string[] = [];
+      if (emailInputs.length > 0) {
+        fields.push("Email");
+        candidateSelectors.push(buildSelector(emailInputs[0]));
+      } else if (axHasEmail) {
+        fields.push("Email");
+        candidateSelectors.push(`input[type="email"]`);
       }
+      if (passwordInputs.length > 0) {
+        fields.push("Password");
+        candidateSelectors.push(buildSelector(passwordInputs[0]));
+        if (passwordInputs.length > 1) {
+          fields.push("Confirm Password");
+          candidateSelectors.push(buildSelector(passwordInputs[1]));
+        }
+      } else if (axHasPassword) {
+        fields.push("Password");
+        candidateSelectors.push(`input[type="password"]`);
+      }
+
+      const isSignup = hasSignupKeywords && !hasLoginKeywords;
+      const primarySelector =
+        emailInputs.length > 0
+          ? buildSelector(emailInputs[0])
+          : passwordInputs.length > 0
+            ? buildSelector(passwordInputs[0])
+            : `input[type="email"]`;
+
+      const axBonus = (axHasEmail ? 1 : 0) + (axHasPassword ? 1 : 0) + (axHasSignupBtn ? 1 : 0);
+      detected.push({
+        order: order++,
+        name: isSignup ? "Account Creation" : "Sign In",
+        description: isSignup
+          ? "User provides credentials to create a new account"
+          : "User signs in with their credentials",
+        fields,
+        stepType: "form",
+        confidence: scoreConfidence(
+          (emailInputs.length > 0 ? 2 : 0) + (passwordInputs.length > 0 ? 2 : 0) + axBonus,
+          7,
+        ),
+        selector: primarySelector,
+        candidateSelectors,
+        actionType: "fill",
+      });
     }
 
-    if (detected.length === 0) {
+    const hasPhoneKeywords = ["phone", "mobile", "sms", "text message"].some((kw) =>
+      pageText.includes(kw),
+    );
+    const phoneInputs = inputs.filter(
+      (e) =>
+        e.type === "tel" ||
+        e.name?.toLowerCase().includes("phone") ||
+        e.name?.toLowerCase().includes("mobile") ||
+        e.placeholder?.toLowerCase().includes("phone"),
+    );
+    if (phoneInputs.length > 0 || hasPhoneKeywords || axHasPhone) {
+      const candidateSelectors = phoneInputs.map((e) => buildSelector(e));
+      const axBonus = axHasPhone ? 1 : 0;
+      detected.push({
+        order: order++,
+        name: "Phone Verification",
+        description: "User provides and verifies their phone number",
+        fields: ["Phone Number", "SMS Code"],
+        stepType: "verification",
+        confidence: scoreConfidence(
+          (phoneInputs.length > 0 ? 2 : 0) + (hasPhoneKeywords ? 1 : 0) + axBonus,
+          4,
+        ),
+        selector: candidateSelectors[0] ?? `input[type="tel"]`,
+        candidateSelectors:
+          candidateSelectors.length > 0
+            ? candidateSelectors
+            : [`input[type="tel"]`, `input[name="phone"]`],
+        actionType: "fill",
+      });
+    }
+
+    const hasVerifyKeywords = ["verify email", "confirm email", "verification code", "otp"].some(
+      (kw) => pageText.includes(kw),
+    );
+    const otpInputs = inputs.filter(
+      (e) =>
+        e.name?.toLowerCase().includes("otp") ||
+        e.name?.toLowerCase().includes("code") ||
+        e.name?.toLowerCase().includes("verif") ||
+        e.placeholder?.toLowerCase().includes("code") ||
+        e.placeholder?.toLowerCase().includes("verif") ||
+        (e.type === "number" && (e.placeholder?.length ?? 0) <= 10),
+    );
+    if (hasVerifyKeywords || otpInputs.length > 0 || axHasOtp) {
+      const candidateSelectors = otpInputs.map((e) => buildSelector(e));
+      const axBonus = axHasOtp ? 1 : 0;
+      detected.push({
+        order: order++,
+        name: "Email Verification",
+        description: "User confirms their email address via a verification code",
+        fields: ["Verification Code"],
+        stepType: "verification",
+        confidence: scoreConfidence(
+          (hasVerifyKeywords ? 2 : 0) + (otpInputs.length > 0 ? 2 : 0) + axBonus,
+          5,
+        ),
+        selector: candidateSelectors[0] ?? `input[name="code"]`,
+        candidateSelectors:
+          candidateSelectors.length > 0
+            ? candidateSelectors
+            : [`input[name="code"]`, `input[placeholder*="code" i]`],
+        actionType: "fill",
+      });
+    }
+
+    const hasProfileKeywords = [
+      "profile",
+      "about you",
+      "personal info",
+      "first name",
+      "last name",
+      "full name",
+    ].some((kw) => pageText.includes(kw));
+    const nameInputs = inputs.filter(
+      (e) =>
+        e.name?.toLowerCase().includes("name") ||
+        e.id?.toLowerCase().includes("name") ||
+        e.placeholder?.toLowerCase().includes("name"),
+    );
+    if (hasProfileKeywords || (nameInputs.length > 0 && detected.length > 0)) {
+      const candidateSelectors = nameInputs.map((e) => buildSelector(e));
+      const fields: string[] = [];
+      if (nameInputs.some((e) => e.name?.toLowerCase().includes("first"))) {
+        fields.push("First Name");
+      }
+      if (nameInputs.some((e) => e.name?.toLowerCase().includes("last"))) {
+        fields.push("Last Name");
+      }
+      if (fields.length === 0) fields.push("Full Name");
+
+      detected.push({
+        order: order++,
+        name: "Profile Setup",
+        description: "User fills in their profile details",
+        fields,
+        stepType: "form",
+        confidence: scoreConfidence(
+          (hasProfileKeywords ? 2 : 0) + (nameInputs.length > 0 ? 2 : 0),
+          4,
+        ),
+        selector: candidateSelectors[0] ?? `input[name="firstName"]`,
+        candidateSelectors:
+          candidateSelectors.length > 0
+            ? candidateSelectors
+            : [`input[name="firstName"]`, `input[name="lastName"]`, `input[name="fullName"]`],
+        actionType: "fill",
+      });
+    }
+
+    const hasPlanKeywords = ["plan", "pricing", "subscription", "choose", "select a plan"].some(
+      (kw) => pageText.includes(kw),
+    );
+    if (hasPlanKeywords && (selects.length > 0 || buttons.length > 2 || axHasPlanBtn)) {
+      const planSelectors = selects.map((e) => buildSelector(e));
+      if (planSelectors.length === 0) {
+        const planBtns = buttons.filter(
+          (e) =>
+            e.text?.toLowerCase().includes("plan") ||
+            e.text?.toLowerCase().includes("free") ||
+            e.text?.toLowerCase().includes("pro") ||
+            e.text?.toLowerCase().includes("basic"),
+        );
+        planSelectors.push(...planBtns.map((e) => buildSelector(e)));
+      }
+      const axBonus = axHasPlanBtn ? 1 : 0;
+      detected.push({
+        order: order++,
+        name: "Plan Selection",
+        description: "User selects a subscription plan",
+        fields: ["Selected Plan"],
+        stepType: "selection",
+        confidence: scoreConfidence(
+          (hasPlanKeywords ? 2 : 0) + (selects.length > 0 ? 1 : 0) + axBonus,
+          4,
+        ),
+        selector: planSelectors[0] ?? `button:has-text("Free")`,
+        candidateSelectors:
+          planSelectors.length > 0
+            ? planSelectors
+            : [`button:has-text("Free")`, `button:has-text("Pro")`, `select`],
+        actionType: selects.length > 0 ? "selectOption" : "click",
+      });
+    }
+
+    const hasPaymentKeywords = ["payment", "billing", "credit card", "card number"].some((kw) =>
+      pageText.includes(kw),
+    );
+    const cardInputs = inputs.filter(
+      (e) =>
+        e.name?.toLowerCase().includes("card") ||
+        e.id?.toLowerCase().includes("card") ||
+        e.placeholder?.toLowerCase().includes("card"),
+    );
+    if (hasPaymentKeywords || cardInputs.length > 0) {
+      const candidateSelectors = cardInputs.map((e) => buildSelector(e));
+      detected.push({
+        order: order++,
+        name: "Payment Details",
+        description: "User enters payment and billing information",
+        fields: ["Card Number", "Expiry", "CVV"],
+        stepType: "form",
+        confidence: scoreConfidence(
+          (hasPaymentKeywords ? 2 : 0) + (cardInputs.length > 0 ? 2 : 0),
+          4,
+        ),
+        selector: candidateSelectors[0] ?? `input[name="cardNumber"]`,
+        candidateSelectors:
+          candidateSelectors.length > 0
+            ? candidateSelectors
+            : [`input[name="cardNumber"]`, `input[placeholder*="card" i]`],
+        actionType: "fill",
+      });
+    }
+
+    const hasConsentKeywords = ["terms", "privacy policy", "agree", "consent"].some((kw) =>
+      pageText.includes(kw),
+    );
+    if (hasConsentKeywords && (checkboxes.length > 0 || axHasCheckbox)) {
+      const candidateSelectors = checkboxes.map((e) => buildSelector(e));
+      const axBonus = axHasCheckbox ? 1 : 0;
+      detected.push({
+        order: order++,
+        name: "Permissions & Consent",
+        description: "User agrees to terms of service and privacy policy",
+        fields: ["Terms Accepted"],
+        stepType: "consent",
+        confidence: scoreConfidence(
+          (hasConsentKeywords ? 2 : 0) + (checkboxes.length > 0 ? 2 : 0) + axBonus,
+          5,
+        ),
+        selector: candidateSelectors[0] ?? `input[type="checkbox"]`,
+        candidateSelectors:
+          candidateSelectors.length > 0
+            ? candidateSelectors
+            : [`input[type="checkbox"]`, `[role="checkbox"]`],
+        actionType: "consent",
+      });
+    }
+
+    const hasWorkspaceKeywords = ["workspace", "organization", "company", "configure", "set up"].some(
+      (kw) => pageText.includes(kw),
+    );
+    if (hasWorkspaceKeywords) {
+      const workspaceInputs = textInputs.filter(
+        (e) =>
+          e.name?.toLowerCase().includes("org") ||
+          e.name?.toLowerCase().includes("company") ||
+          e.name?.toLowerCase().includes("workspace") ||
+          e.placeholder?.toLowerCase().includes("company") ||
+          e.placeholder?.toLowerCase().includes("workspace"),
+      );
+      const candidateSelectors = workspaceInputs.map((e) => buildSelector(e));
+      detected.push({
+        order: order++,
+        name: "App Configuration",
+        description: "User configures their workspace or organization settings",
+        fields: ["Company Name", "Industry"],
+        stepType: "form",
+        confidence: scoreConfidence((hasWorkspaceKeywords ? 1 : 0) + (workspaceInputs.length > 0 ? 2 : 0), 3),
+        selector: candidateSelectors[0] ?? `input[name="company"]`,
+        candidateSelectors:
+          candidateSelectors.length > 0
+            ? candidateSelectors
+            : [`input[name="company"]`, `input[placeholder*="company" i]`],
+        actionType: "fill",
+      });
+    }
+
+    const hasWelcomeKeywords = [
+      "welcome",
+      "all set",
+      "you're ready",
+      "dashboard",
+      "get started",
+    ].some((kw) => pageText.includes(kw));
+    detected.push({
+      order: order++,
+      name: "Completion",
+      description: "Onboarding complete — user lands on the main app",
+      fields: [],
+      stepType: "confirmation",
+      confidence: hasWelcomeKeywords ? "high" : "medium",
+      selector: `h1, h2, .dashboard, main`,
+      candidateSelectors: [`h1`, `h2`, `.dashboard`, `main`, `[role="main"]`],
+      actionType: "confirmation",
+    });
+
+    if (detected.length <= 1) {
+      detected.length = 0;
       detected.push(
-        { order: 1, name: "Account Creation", description: "User provides credentials to create an account", fields: ["Email", "Password"], stepType: "form" },
-        { order: 2, name: "Profile Setup", description: "User fills in their profile details", fields: ["First Name", "Last Name"], stepType: "form" },
-        { order: 3, name: "Completion", description: "Onboarding complete — user lands on the main app", fields: [], stepType: "confirmation" },
+        {
+          order: 1,
+          name: "Account Creation",
+          description: "User provides credentials to create an account",
+          fields: ["Email", "Password"],
+          stepType: "form",
+          confidence: "medium" as ConfidenceLevel,
+          selector: `input[type="email"]`,
+          candidateSelectors: [`input[type="email"]`, `input[name="email"]`, `input[placeholder*="email" i]`],
+          actionType: "fill",
+        },
+        {
+          order: 2,
+          name: "Profile Setup",
+          description: "User fills in their profile details",
+          fields: ["First Name", "Last Name"],
+          stepType: "form",
+          confidence: "medium" as ConfidenceLevel,
+          selector: `input[name="firstName"]`,
+          candidateSelectors: [`input[name="firstName"]`, `input[name="lastName"]`, `input[name="name"]`],
+          actionType: "fill",
+        },
+        {
+          order: 3,
+          name: "Completion",
+          description: "Onboarding complete — user lands on the main app",
+          fields: [],
+          stepType: "confirmation",
+          confidence: "low" as ConfidenceLevel,
+          selector: `h1, main`,
+          candidateSelectors: [`h1`, `h2`, `main`, `.dashboard`],
+          actionType: "confirmation",
+        },
       );
     }
-  } catch {
-    detected.push(
-      { order: 1, name: "Account Creation", description: "User provides credentials to create an account", fields: ["Email", "Password"], stepType: "form" },
-      { order: 2, name: "Profile Setup", description: "User fills in their profile details", fields: ["First Name", "Last Name"], stepType: "form" },
-      { order: 3, name: "Completion", description: "Onboarding complete — user lands on the main app", fields: [], stepType: "confirmation" },
-    );
-  }
 
-  return { appName, url, detectedSteps: detected, confidence: detected.length > 3 ? "high" : "medium" };
+    const highCount = detected.filter((s) => s.confidence === "high").length;
+    const overallConfidence =
+      highCount / detected.length >= 0.5 ? "high" : highCount > 0 ? "medium" : "low";
+
+    logger.info(
+      { url, stepsDetected: detected.length, overallConfidence },
+      "Playwright scan complete",
+    );
+
+    return { appName, url, detectedSteps: detected, confidence: overallConfidence };
+  } catch (err) {
+    logger.error({ err, url }, "Scanner error, falling back to defaults");
+    return {
+      appName,
+      url,
+      detectedSteps: [
+        {
+          order: 1,
+          name: "Account Creation",
+          description: "User provides credentials to create an account",
+          fields: ["Email", "Password"],
+          stepType: "form",
+          confidence: "low" as ConfidenceLevel,
+          selector: `input[type="email"]`,
+          candidateSelectors: [`input[type="email"]`, `input[name="email"]`],
+          actionType: "fill",
+        },
+        {
+          order: 2,
+          name: "Profile Setup",
+          description: "User fills in their profile details",
+          fields: ["First Name", "Last Name"],
+          stepType: "form",
+          confidence: "low" as ConfidenceLevel,
+          selector: `input[name="firstName"]`,
+          candidateSelectors: [`input[name="firstName"]`, `input[name="lastName"]`],
+          actionType: "fill",
+        },
+        {
+          order: 3,
+          name: "Completion",
+          description: "Onboarding complete — user lands on the main app",
+          fields: [],
+          stepType: "confirmation",
+          confidence: "low" as ConfidenceLevel,
+          selector: "h1",
+          candidateSelectors: ["h1", "h2", "main"],
+          actionType: "confirmation",
+        },
+      ],
+      confidence: "low",
+    };
+  } finally {
+    try { await context?.close(); } catch { /* ignore */ }
+    try { await browser?.close(); } catch { /* ignore */ }
+  }
 }
 
 router.post("/simulations/scan", async (req, res): Promise<void> => {
   const parsed = ScanUrlBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const urlError = validateScanUrl(parsed.data.url);
+  if (urlError) {
+    res.status(400).json({ error: urlError });
     return;
   }
 
@@ -157,6 +703,12 @@ router.post("/simulations", async (req, res): Promise<void> => {
     return;
   }
 
+  const urlError = validateScanUrl(parsed.data.appUrl);
+  if (urlError) {
+    res.status(400).json({ error: urlError });
+    return;
+  }
+
   const [simulation] = await db
     .insert(simulationsTable)
     .values({
@@ -212,6 +764,14 @@ router.patch("/simulations/:id", async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
+  }
+
+  if (parsed.data.appUrl !== undefined) {
+    const urlError = validateScanUrl(parsed.data.appUrl);
+    if (urlError) {
+      res.status(400).json({ error: urlError });
+      return;
+    }
   }
 
   const updateData: Partial<typeof simulationsTable.$inferInsert> = {};
@@ -291,6 +851,9 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     return;
   }
 
+  const bodyParsed = CreateRunBody.safeParse(req.body ?? {});
+  const headedMode = bodyParsed.success ? (bodyParsed.data.headedMode ?? false) : false;
+
   const [simulation] = await db
     .select()
     .from(simulationsTable)
@@ -307,32 +870,58 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     description: string;
     fields: string[];
     stepType: string;
+    selector?: string;
+    actionType?: string;
+    confidence?: string;
   }>;
 
   const runStart = Date.now();
-  const stepResults = [];
-  let passedSteps = 0;
-  let failedSteps = 0;
 
-  for (const step of steps) {
-    const stepStart = Date.now();
-    await new Promise((resolve) => setTimeout(resolve, 200 + Math.random() * 600));
-    const stepDuration = Date.now() - stepStart;
-    const passed = step.stepType === "confirmation" || Math.random() > 0.15;
-
-    if (passed) passedSteps++;
-    else failedSteps++;
-
-    stepResults.push({
-      stepOrder: step.order,
-      stepName: step.name,
-      status: passed ? "passed" : "failed",
-      durationMs: stepDuration,
-      generatedData: generateFakeData(step.fields),
-      errorMessage: passed ? null : `Simulated failure: form validation error on ${step.name}`,
-    });
+  const runUrlError = validateScanUrl(simulation.appUrl);
+  if (runUrlError) {
+    res.status(400).json({ error: `Cannot run simulation: ${runUrlError}` });
+    return;
   }
 
+  logger.info({ simulationId: id, steps: steps.length, headedMode }, "Starting Playwright run");
+
+  let stepResults: Array<{
+    stepOrder: number;
+    stepName: string;
+    status: string;
+    durationMs: number;
+    generatedData: Record<string, unknown>;
+    errorMessage: string | null;
+    screenshot: string | null;
+    selectorUsed: string | null;
+    actionTaken: string | null;
+  }>;
+  let videoPath: string | null = null;
+
+  try {
+    const runResult = await runSimulation(simulation.appUrl, steps, {
+      headedMode,
+      timeoutMs: 15000,
+    });
+    stepResults = runResult.stepResults;
+    videoPath = runResult.videoPath;
+  } catch (err) {
+    logger.error({ err, simulationId: id }, "Engine run failed");
+    stepResults = steps.map((step) => ({
+      stepOrder: step.order,
+      stepName: step.name,
+      status: "failed",
+      durationMs: 0,
+      generatedData: {},
+      errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
+      screenshot: null,
+      selectorUsed: null,
+      actionTaken: null,
+    }));
+  }
+
+  const passedSteps = stepResults.filter((s) => s.status === "passed").length;
+  const failedSteps = stepResults.filter((s) => s.status === "failed").length;
   const totalDuration = Date.now() - runStart;
   const overallStatus = failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial";
 
@@ -345,6 +934,8 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
       passedSteps,
       failedSteps,
       durationMs: totalDuration,
+      headedMode,
+      videoPath,
       stepResults,
       completedAt: new Date(),
     })
@@ -358,6 +949,11 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
       lastRunAt: new Date(),
     })
     .where(eq(simulationsTable.id, id));
+
+  logger.info(
+    { simulationId: id, runId: run.id, overallStatus, passedSteps, failedSteps },
+    "Run complete",
+  );
 
   res.status(201).json({
     ...run,

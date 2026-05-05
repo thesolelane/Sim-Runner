@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams, Link } from "wouter";
 import { 
   useGetSimulation, 
@@ -11,7 +12,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Play, Activity, Clock, ArrowLeft, History } from "lucide-react";
+import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,11 +33,12 @@ export default function SimulationDetail() {
     query: { enabled: !!simId, queryKey: getListRunsQueryKey(simId) }
   });
 
+  const [headedMode, setHeadedMode] = useState(false);
   const createRunMutation = useCreateRun();
 
   const handleRun = () => {
     createRunMutation.mutate(
-      { id: simId },
+      { id: simId, data: { headedMode } },
       {
         onSuccess: () => {
           toast({ title: "Simulation Started", description: "A new run has been queued." });
@@ -69,16 +73,29 @@ export default function SimulationDetail() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{simulation.name}</h1>
-          <p className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
+          <div className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
             <span>Target: <a href={simulation.appUrl} target="_blank" rel="noreferrer" className="underline hover:text-foreground">{simulation.appUrl}</a></span>
             <span>•</span>
             <Badge variant="outline">{simulation.appType}</Badge>
-          </p>
+          </div>
         </div>
-        <Button size="lg" onClick={handleRun} disabled={createRunMutation.isPending} className="font-semibold shadow-md hover:shadow-lg transition-all">
-          {createRunMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Play className="mr-2 h-5 w-5" />}
-          Run Simulation
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="headed-mode"
+              checked={headedMode}
+              onCheckedChange={setHeadedMode}
+            />
+            <Label htmlFor="headed-mode" className="text-sm flex items-center gap-1.5 cursor-pointer select-none">
+              <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+              Record Video
+            </Label>
+          </div>
+          <Button size="lg" onClick={handleRun} disabled={createRunMutation.isPending} className="font-semibold shadow-md hover:shadow-lg transition-all">
+            {createRunMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Play className="mr-2 h-5 w-5" />}
+            Run Simulation
+          </Button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6">

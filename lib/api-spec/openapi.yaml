@@ -202,6 +202,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRunBody"
       responses:
         "201":
           description: Run started
@@ -290,12 +296,30 @@ components:
             type: string
         stepType:
           type: string
+        confidence:
+          type: string
+          description: "Confidence level: high, medium, or low"
+        selector:
+          type: string
+          description: "Best candidate CSS/text selector for this step's primary element"
+        candidateSelectors:
+          type: array
+          items:
+            type: string
+          description: "All candidate selectors found for this step"
+        actionType:
+          type: string
+          description: "Suggested action: navigate, click, fill, waitForText, selectOption"
       required:
         - order
         - name
         - description
         - fields
         - stepType
+        - confidence
+        - selector
+        - candidateSelectors
+        - actionType
 
     ScanResult:
       type: object
@@ -331,6 +355,16 @@ components:
             type: string
         stepType:
           type: string
+        selector:
+          type: string
+        actionType:
+          type: string
+        confidence:
+          type: string
+        candidateSelectors:
+          type: array
+          items:
+            type: string
       required:
         - order
         - name
@@ -375,6 +409,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowStep"
+
+    CreateRunBody:
+      type: object
+      properties:
+        headedMode:
+          type: boolean
+          description: "Run in headed mode and record a video"
 
     Simulation:
       type: object
@@ -432,6 +473,15 @@ components:
           additionalProperties: true
         errorMessage:
           type: ["string", "null"]
+        screenshot:
+          type: ["string", "null"]
+          description: "Base64-encoded PNG screenshot captured on failure"
+        selectorUsed:
+          type: ["string", "null"]
+          description: "The selector that was used to find the element"
+        actionTaken:
+          type: ["string", "null"]
+          description: "Description of the action performed"
       required:
         - stepOrder
         - stepName
@@ -457,6 +507,10 @@ components:
           type: integer
         durationMs:
           type: ["integer", "null"]
+        headedMode:
+          type: boolean
+        videoPath:
+          type: ["string", "null"]
         startedAt:
           type: string
         completedAt:
@@ -469,6 +523,8 @@ components:
         - passedSteps
         - failedSteps
         - durationMs
+        - headedMode
+        - videoPath
         - startedAt
         - completedAt
 
@@ -489,6 +545,10 @@ components:
           type: integer
         durationMs:
           type: ["integer", "null"]
+        headedMode:
+          type: boolean
+        videoPath:
+          type: ["string", "null"]
         startedAt:
           type: string
         completedAt:
@@ -505,6 +565,8 @@ components:
         - passedSteps
         - failedSteps
         - durationMs
+        - headedMode
+        - videoPath
         - startedAt
         - completedAt
         - stepResults

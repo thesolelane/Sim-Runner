@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { simulationsTable } from "./simulations";
@@ -11,6 +11,8 @@ export const simulationRunsTable = pgTable("simulation_runs", {
   passedSteps: integer("passed_steps").notNull().default(0),
   failedSteps: integer("failed_steps").notNull().default(0),
   durationMs: integer("duration_ms"),
+  headedMode: boolean("headed_mode").notNull().default(false),
+  videoPath: text("video_path"),
   stepResults: jsonb("step_results").$type<Array<{
     stepOrder: number;
     stepName: string;
@@ -18,6 +20,9 @@ export const simulationRunsTable = pgTable("simulation_runs", {
     durationMs: number;
     generatedData: Record<string, unknown>;
     errorMessage: string | null;
+    screenshot: string | null;
+    selectorUsed: string | null;
+    actionTaken: string | null;
   }>>(),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),

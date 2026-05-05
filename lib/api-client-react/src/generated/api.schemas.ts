@@ -24,6 +24,14 @@ export interface DetectedStep {
   description: string;
   fields: string[];
   stepType: string;
+  /** Confidence level: high, medium, or low */
+  confidence: string;
+  /** Best candidate CSS/text selector for this step's primary element */
+  selector: string;
+  /** All candidate selectors found for this step */
+  candidateSelectors: string[];
+  /** Suggested action: navigate, click, fill, waitForText, selectOption */
+  actionType: string;
 }
 
 export interface ScanResult {
@@ -39,6 +47,10 @@ export interface FlowStep {
   description: string;
   fields: string[];
   stepType: string;
+  selector?: string;
+  actionType?: string;
+  confidence?: string;
+  candidateSelectors?: string[];
 }
 
 export interface CreateSimulationBody {
@@ -55,6 +67,11 @@ export interface UpdateSimulationBody {
   appUrl?: string;
   appType?: string;
   steps?: FlowStep[];
+}
+
+export interface CreateRunBody {
+  /** Run in headed mode and record a video */
+  headedMode?: boolean;
 }
 
 export interface Simulation {
@@ -83,6 +100,21 @@ export interface StepResult {
   generatedData: StepResultGeneratedData;
   /** @nullable */
   errorMessage: string | null;
+  /**
+   * Base64-encoded PNG screenshot captured on failure
+   * @nullable
+   */
+  screenshot?: string | null;
+  /**
+   * The selector that was used to find the element
+   * @nullable
+   */
+  selectorUsed?: string | null;
+  /**
+   * Description of the action performed
+   * @nullable
+   */
+  actionTaken?: string | null;
 }
 
 export interface SimulationRun {
@@ -94,6 +126,9 @@ export interface SimulationRun {
   failedSteps: number;
   /** @nullable */
   durationMs: number | null;
+  headedMode: boolean;
+  /** @nullable */
+  videoPath: string | null;
   startedAt: string;
   /** @nullable */
   completedAt: string | null;
@@ -108,6 +143,9 @@ export interface SimulationRunDetail {
   failedSteps: number;
   /** @nullable */
   durationMs: number | null;
+  headedMode: boolean;
+  /** @nullable */
+  videoPath: string | null;
   startedAt: string;
   /** @nullable */
   completedAt: string | null;
