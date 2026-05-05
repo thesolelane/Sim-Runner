@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Cooperanth-sim-runner API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: simulations
+    description: Simulation management
+  - name: runs
+    description: Simulation run execution and results
 paths:
   /healthz:
     get:
@@ -24,6 +28,224 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /simulations/scan:
+    post:
+      operationId: scanUrl
+      tags: [simulations]
+      summary: Scan a URL to detect onboarding steps
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanUrlBody"
+      responses:
+        "200":
+          description: Detected onboarding steps
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "400":
+          description: Invalid URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /simulations/stats:
+    get:
+      operationId: getSimulationStats
+      tags: [simulations]
+      summary: Get overall simulation statistics
+      responses:
+        "200":
+          description: Simulation stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationStats"
+
+  /simulations:
+    get:
+      operationId: listSimulations
+      tags: [simulations]
+      summary: List all simulations
+      responses:
+        "200":
+          description: List of simulations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Simulation"
+    post:
+      operationId: createSimulation
+      tags: [simulations]
+      summary: Create a new simulation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSimulationBody"
+      responses:
+        "201":
+          description: Created simulation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Simulation"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /simulations/{id}:
+    get:
+      operationId: getSimulation
+      tags: [simulations]
+      summary: Get a simulation by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Simulation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Simulation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateSimulation
+      tags: [simulations]
+      summary: Update a simulation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSimulationBody"
+      responses:
+        "200":
+          description: Updated simulation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Simulation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteSimulation
+      tags: [simulations]
+      summary: Delete a simulation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /simulations/{id}/runs:
+    get:
+      operationId: listRuns
+      tags: [runs]
+      summary: List all runs for a simulation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SimulationRun"
+    post:
+      operationId: createRun
+      tags: [runs]
+      summary: Start a new simulation run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Run started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationRun"
+        "404":
+          description: Simulation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /simulations/{id}/runs/{runId}:
+    get:
+      operationId: getRun
+      tags: [runs]
+      summary: Get a specific run with step results
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Run with step results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SimulationRunDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +256,277 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    ScanUrlBody:
+      type: object
+      properties:
+        url:
+          type: string
+        appName:
+          type: string
+      required:
+        - url
+        - appName
+
+    DetectedStep:
+      type: object
+      properties:
+        order:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            type: string
+        stepType:
+          type: string
+      required:
+        - order
+        - name
+        - description
+        - fields
+        - stepType
+
+    ScanResult:
+      type: object
+      properties:
+        appName:
+          type: string
+        url:
+          type: string
+        detectedSteps:
+          type: array
+          items:
+            $ref: "#/components/schemas/DetectedStep"
+        confidence:
+          type: string
+      required:
+        - appName
+        - url
+        - detectedSteps
+        - confidence
+
+    FlowStep:
+      type: object
+      properties:
+        order:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        fields:
+          type: array
+          items:
+            type: string
+        stepType:
+          type: string
+      required:
+        - order
+        - name
+        - description
+        - fields
+        - stepType
+
+    CreateSimulationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        appName:
+          type: string
+        appUrl:
+          type: string
+        appType:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowStep"
+      required:
+        - name
+        - appName
+        - appUrl
+        - appType
+        - steps
+
+    UpdateSimulationBody:
+      type: object
+      properties:
+        name:
+          type: string
+        appName:
+          type: string
+        appUrl:
+          type: string
+        appType:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowStep"
+
+    Simulation:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        appName:
+          type: string
+        appUrl:
+          type: string
+        appType:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlowStep"
+        totalRuns:
+          type: integer
+        lastRunStatus:
+          type: ["string", "null"]
+        lastRunAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - name
+        - appName
+        - appUrl
+        - appType
+        - steps
+        - totalRuns
+        - lastRunStatus
+        - lastRunAt
+        - createdAt
+        - updatedAt
+
+    StepResult:
+      type: object
+      properties:
+        stepOrder:
+          type: integer
+        stepName:
+          type: string
+        status:
+          type: string
+        durationMs:
+          type: integer
+        generatedData:
+          type: object
+          additionalProperties: true
+        errorMessage:
+          type: ["string", "null"]
+      required:
+        - stepOrder
+        - stepName
+        - status
+        - durationMs
+        - generatedData
+        - errorMessage
+
+    SimulationRun:
+      type: object
+      properties:
+        id:
+          type: integer
+        simulationId:
+          type: integer
+        status:
+          type: string
+        totalSteps:
+          type: integer
+        passedSteps:
+          type: integer
+        failedSteps:
+          type: integer
+        durationMs:
+          type: ["integer", "null"]
+        startedAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+      required:
+        - id
+        - simulationId
+        - status
+        - totalSteps
+        - passedSteps
+        - failedSteps
+        - durationMs
+        - startedAt
+        - completedAt
+
+    SimulationRunDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        simulationId:
+          type: integer
+        status:
+          type: string
+        totalSteps:
+          type: integer
+        passedSteps:
+          type: integer
+        failedSteps:
+          type: integer
+        durationMs:
+          type: ["integer", "null"]
+        startedAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+        stepResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/StepResult"
+      required:
+        - id
+        - simulationId
+        - status
+        - totalSteps
+        - passedSteps
+        - failedSteps
+        - durationMs
+        - startedAt
+        - completedAt
+        - stepResults
+
+    SimulationStats:
+      type: object
+      properties:
+        totalSimulations:
+          type: integer
+        totalRuns:
+          type: integer
+        passRate:
+          type: number
+        avgDurationMs:
+          type: ["number", "null"]
+        recentRuns:
+          type: array
+          items:
+            $ref: "#/components/schemas/SimulationRun"
+      required:
+        - totalSimulations
+        - totalRuns
+        - passRate
+        - avgDurationMs
+        - recentRuns
