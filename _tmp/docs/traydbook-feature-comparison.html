@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TraydBook — Platform Feature Comparison</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Barlow:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Barlow', sans-serif;
+    background: #f4f4f5;
+    color: #1a1a1a;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 32px auto;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.12);
+  }
+
+  /* Header */
+  .header {
+    background: #141416;
+    padding: 36px 48px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: #E85D04;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .logo-text {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    color: #F0ECE6;
+  }
+
+  .logo-text span { color: #E85D04; }
+
+  .header-meta {
+    text-align: right;
+  }
+
+  .header-meta h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #F0ECE6;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .header-meta p {
+    font-size: 12px;
+    color: #9D9990;
+    margin-top: 4px;
+  }
+
+  /* Tagline bar */
+  .tagline {
+    background: #E85D04;
+    padding: 10px 48px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #fff;
+  }
+
+  /* Body */
+  .body { padding: 32px 48px 40px; }
+
+  .intro {
+    font-size: 14px;
+    color: #444;
+    line-height: 1.7;
+    margin-bottom: 28px;
+    max-width: 700px;
+  }
+
+  /* Section */
+  .section { margin-bottom: 28px; }
+
+  .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #E85D04;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #E85D04;
+    display: inline-block;
+  }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead th {
+    padding: 8px 10px;
+    text-align: center;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #fff;
+    background: #22252A;
+  }
+
+  thead th:first-child {
+    text-align: left;
+    width: 36%;
+    border-radius: 6px 0 0 0;
+  }
+
+  thead th:last-child { border-radius: 0 6px 0 0; }
+
+  thead th.trayd {
+    background: #E85D04;
+    color: #fff;
+  }
+
+  tbody tr:nth-child(even) td { background: #f9f9f9; }
+  tbody tr:hover td { background: #fff3eb; }
+
+  tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #eee;
+    color: #333;
+    vertical-align: middle;
+  }
+
+  tbody td:first-child {
+    font-weight: 500;
+    color: #1a1a1a;
+  }
+
+  tbody td:not(:first-child) {
+    text-align: center;
+  }
+
+  .check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #dcfce7;
+    color: #16a34a;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .cross {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #f3f4f6;
+    color: #9ca3af;
+    font-size: 13px;
+  }
+
+  .partial {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fef9c3;
+    color: #ca8a04;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* Highlight TraydBook column */
+  td.trayd-col {
+    background: rgba(232,93,4,0.06) !important;
+    font-weight: 600;
+  }
+
+  /* Two-column layout for sections */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* Footer */
+  .footer {
+    background: #141416;
+    padding: 20px 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .footer-note {
+    font-size: 11px;
+    color: #9D9990;
+    line-height: 1.6;
+  }
+
+  .footer-note strong { color: #F0ECE6; }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    color: #9D9990;
+    flex-shrink: 0;
+  }
+
+  .legend span { display: flex; align-items: center; gap: 5px; }
+
+  /* Unique badge */
+  .unique {
+    display: inline-block;
+    background: #E85D04;
+    color: #fff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+
+  @media print {
+    body { background: #fff; }
+    .page { margin: 0; border-radius: 0; box-shadow: none; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 17 17" fill="none" width="22" height="22">
+          <rect x="2" y="1.5" width="9" height="13" rx="1.5" fill="rgba(255,255,255,0.15)" stroke="white" stroke-width="1.2"/>
+          <rect x="5" y="1.5" width="9" height="13" rx="1.5" fill="rgba(255,255,255,0.3)" stroke="white" stroke-width="1.2"/>
+          <path d="M7 6h4M7 9h3M7 12h2" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="logo-text">Trayd<span>Book</span></div>
+    </div>
+    <div class="header-meta">
+      <h1>Platform Feature Comparison</h1>
+      <p>TraydBook vs. Facebook &middot; LinkedIn &middot; Twitter/X &middot; Instagram</p>
+    </div>
+  </div>
+
+  <div class="tagline">The Professional Network Built Exclusively for the Construction Trades</div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <p class="intro">
+      TraydBook is purpose-built for contractors, tradespeople, and construction professionals. 
+      Where general social platforms offer broad reach, TraydBook delivers the specific tools 
+      trades need — a bid board, verified credentials, structured job listings, and a reputation 
+      system built around real project work. Below is a direct comparison of key platform features.
+    </p>
+
+    <!-- Social & Feed -->
+    <div class="section">
+      <div class="section-title">Social Feed & Content</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="trayd">TraydBook</th>
+            <th>Facebook</th>
+            <th>LinkedIn</th>
+            <th>Twitter/X</th>
+            <th>Instagram</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Post Feed / Timeline</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Trade-Specific Post Types <span class="unique">Unique</span></td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Photo Posts</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Like, Comment &amp; Share</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Hashtags &amp; Trending</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Boosted / Featured Posts</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Urgent Flagging on Posts <span class="unique">Unique</span></td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Stories / Reels</td>
+            <td class="trayd-col"><span class="cross">—</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Live Video</td>
+            <td class="trayd-col"><span class="cross">—</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Two column: Profiles + Networking -->
+    <div class="two-col">
+
+      <!-- Profiles -->
+      <div class="section">
+        <div class="section-title">Profiles &amp; Credentials</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:46%">Feature</th>
+              <th class="trayd" style="width:12%">TB</th>
+              <th style="width:11%">FB</th>
+              <th style="width:11%">LI</th>
+              <th style="width:11%">TW</th>
+              <th style="width:11%">IG</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>User Profile Page</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>Verified Badge</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="partial">$</span></td>
+              <td><span class="partial">$</span></td>
+            </tr>
+            <tr>
+              <td>Trade / License Display <span class="unique">Unique</span></td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Availability Status <span class="unique">Unique</span></td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="partial">~</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Star Ratings &amp; Reviews <span class="unique">Unique</span></td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Portfolio / Work Showcase</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>Account Type Tiers</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Networking -->
+      <div class="section">
+        <div class="section-title">Networking &amp; Discovery</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:46%">Feature</th>
+              <th class="trayd" style="width:12%">TB</th>
+              <th style="width:11%">FB</th>
+              <th style="width:11%">LI</th>
+              <th style="width:11%">TW</th>
+              <th style="width:11%">IG</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Connect / Follow System</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>People Suggestions</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>Contractor Directory <span class="unique">Unique</span></td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Filter by Trade / Location</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="partial">~</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Groups / Communities</td>
+              <td class="trayd-col"><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Business Pages</td>
+              <td class="trayd-col"><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>Always Free for Contractors <span class="unique">Unique</span></td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Jobs & Bids — full width, this is the key differentiator -->
+    <div class="section">
+      <div class="section-title">Jobs &amp; Bid Board — The Core Differentiator</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="trayd">TraydBook</th>
+            <th>Facebook</th>
+            <th>LinkedIn</th>
+            <th>Twitter/X</th>
+            <th>Instagram</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Job Board</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="partial">~</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Post a Job Listing</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="partial">~</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Request for Quote (RFQ / Bid Board) <span class="unique">Unique</span></td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Submit a Bid / Proposal <span class="unique">Unique</span></td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Trade-Specific Job Categories <span class="unique">Unique</span></td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Budget / Pay Range on Listings</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Urgent Job Flagging <span class="unique">Unique</span></td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+          <tr>
+            <td>Structured Project Inquiry Form <span class="unique">Unique</span></td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+            <td><span class="cross">—</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Two column: Messaging + Payments -->
+    <div class="two-col">
+
+      <div class="section">
+        <div class="section-title">Messaging</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:46%">Feature</th>
+              <th class="trayd" style="width:12%">TB</th>
+              <th style="width:11%">FB</th>
+              <th style="width:11%">LI</th>
+              <th style="width:11%">TW</th>
+              <th style="width:11%">IG</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Direct Messaging</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>Group Messaging</td>
+              <td class="trayd-col"><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>Structured First-Contact Form <span class="unique">Unique</span></td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Real-Time Notifications</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>SMS Text Alerts</td>
+              <td class="trayd-col"><span class="partial">~</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Pricing &amp; Access</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:46%">Feature</th>
+              <th class="trayd" style="width:12%">TB</th>
+              <th style="width:11%">FB</th>
+              <th style="width:11%">LI</th>
+              <th style="width:11%">TW</th>
+              <th style="width:11%">IG</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Free for Contractors — Always <span class="unique">Unique</span></td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Credit / Token System</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Pay-Per-Message to Pro</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="partial">~</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+            <tr>
+              <td>Subscription Option</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>No Job Listing Fees for Contractors</td>
+              <td class="trayd-col"><span class="check">✓</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+              <td><span class="cross">—</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- Mobile -->
+    <div class="section">
+      <div class="section-title">Mobile Experience</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="trayd">TraydBook</th>
+            <th>Facebook</th>
+            <th>LinkedIn</th>
+            <th>Twitter/X</th>
+            <th>Instagram</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Mobile-Optimized Web App</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Bottom Tab Navigation</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Native iOS &amp; Android App</td>
+            <td class="trayd-col"><span class="cross">—</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Works on Any Device, No App Required</td>
+            <td class="trayd-col"><span class="check">✓</span></td>
+            <td><span class="partial">~</span></td>
+            <td><span class="partial">~</span></td>
+            <td><span class="partial">~</span></td>
+            <td><span class="partial">~</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /body -->
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-note">
+      <strong>TraydBook</strong> &mdash; Built for the trades. Free for contractors, always.<br>
+      traydbook.com &nbsp;&middot;&nbsp; For inquiries: hello@traydbook.com
+    </div>
+    <div class="legend">
+      <span><span class="check" style="display:inline-flex">✓</span> Available</span>
+      <span><span class="cross" style="display:inline-flex">—</span> Not available</span>
+      <span><span class="partial" style="display:inline-flex">~</span> Partial / Paid</span>
+      <span><span class="unique" style="vertical-align:baseline">Unique</span> TraydBook only</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

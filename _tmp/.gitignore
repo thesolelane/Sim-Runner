@@ -1,0 +1,11 @@
+node_modules
+dist
+admin-dist
+.env
+.env.local
+.env.*.local
+
+# Log files and debug attachments — may contain secrets
+attached_assets/
+.local/
+*.log
