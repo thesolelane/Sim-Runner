@@ -14,6 +14,8 @@ tags:
     description: Simulation management
   - name: runs
     description: Simulation run execution and results
+  - name: Storage
+    description: Object storage upload and serving endpoints.
 paths:
   /healthz:
     get:
@@ -66,6 +68,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SimulationStats"
+
+  /simulations/webhook/{token}:
+    post:
+      operationId: triggerWebhook
+      tags: [simulations]
+      summary: Trigger a simulation run via webhook token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "202":
+          description: Run queued (polling for result via runId)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookTriggerResponse"
+        "403":
+          description: Webhook is disabled for this simulation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Token not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /simulations:
     get:
@@ -252,6 +285,66 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      description: |
+        Returns a presigned GCS URL for direct upload. The client sends JSON
+        metadata here, then uploads the file directly to the returned URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlBody"
+      responses:
+        "200":
+          description: Presigned upload URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestUploadUrlResponse"
+        "400":
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicObject
+      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Object content streamed with correct Content-Type.
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -269,6 +362,51 @@ components:
           type: string
       required:
         - error
+
+    RequestUploadUrlBody:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Original file name.
+        size:
+          type: integer
+          minimum: 1
+          description: File size in bytes.
+        contentType:
+          type: string
+          minLength: 1
+          description: MIME type of the file (e.g. image/jpeg).
+
+    RequestUploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+          format: uri
+          description: Presigned GCS URL for PUT upload.
+        objectPath:
+          type: string
+          description: Normalized object path (e.g. /objects/uploads/uuid). Store this in your database.
+        metadata:
+          $ref: "#/components/schemas/RequestUploadUrlBody"
+
+    WebhookTriggerResponse:
+      type: object
+      properties:
+        runId:
+          type: integer
+        simulationId:
+          type: integer
+        status:
+          type: string
+      required:
+        - runId
+        - simulationId
+        - status
 
     ScanUrlBody:
       type: object
@@ -409,6 +547,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowStep"
+        schedule:
+          type: ["string", "null"]
+          description: "Cron expression for scheduled runs (e.g. '0 * * * *' for hourly), or null to disable"
+        alertThreshold:
+          type: ["integer", "null"]
+          description: "Pass rate threshold (0-100) below which an alert is sent, or null to disable"
+        alertDestination:
+          type: ["string", "null"]
+          description: "Slack webhook URL or email address for alerts, or null to disable"
+        webhookEnabled:
+          type: boolean
+          description: "Enable or disable the webhook trigger endpoint"
 
     CreateRunBody:
       type: object
@@ -440,6 +590,25 @@ components:
           type: ["string", "null"]
         lastRunAt:
           type: ["string", "null"]
+        schedule:
+          type: ["string", "null"]
+        alertThreshold:
+          type: ["integer", "null"]
+        alertDestination:
+          type: ["string", "null"]
+        webhookToken:
+          type: ["string", "null"]
+        webhookEnabled:
+          type: boolean
+          description: "Whether the webhook trigger endpoint is active"
+        lastAlertedAt:
+          type: ["string", "null"]
+        nextRunAt:
+          type: ["string", "null"]
+          description: "ISO 8601 datetime of the next scheduled run, or null if no schedule"
+        recentPassRate:
+          type: ["number", "null"]
+          description: "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs"
         createdAt:
           type: string
         updatedAt:
@@ -454,6 +623,14 @@ components:
         - totalRuns
         - lastRunStatus
         - lastRunAt
+        - schedule
+        - alertThreshold
+        - alertDestination
+        - webhookToken
+        - webhookEnabled
+        - lastAlertedAt
+        - nextRunAt
+        - recentPassRate
         - createdAt
         - updatedAt
 
@@ -549,6 +726,9 @@ components:
           type: boolean
         videoPath:
           type: ["string", "null"]
+        videoUrl:
+          type: ["string", "null"]
+          description: "URL to stream the recorded video, or null if no recording exists"
         startedAt:
           type: string
         completedAt:
@@ -567,6 +747,7 @@ components:
         - durationMs
         - headedMode
         - videoPath
+        - videoUrl
         - startedAt
         - completedAt
         - stepResults

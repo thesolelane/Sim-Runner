@@ -1,3 +1,6 @@
+import fs from "fs";
+import { Readable } from "stream";
+import type { ReadableStream as NodeWebStream } from "node:stream/web";
 import { Router, type IRouter } from "express";
 import { eq, desc, avg, count, sql } from "drizzle-orm";
 import { db, simulationsTable, simulationRunsTable } from "@workspace/db";
@@ -11,8 +14,37 @@ import {
   DeleteSimulationParams,
   CreateRunBody,
 } from "@workspace/api-zod";
+import { CronExpressionParser } from "cron-parser";
 import { runSimulation, NIX_LIB_PATHS } from "../lib/engine";
+import { registerSchedule, unregisterSchedule } from "../lib/scheduling";
+import { checkAndSendAlert } from "../lib/alerting";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
+import { randomUUID } from "crypto";
+
+const objectStorageService = new ObjectStorageService();
+
+/**
+ * Upload a local video file to object storage (best effort).
+ * Returns the GCS object path (/objects/sim-videos/uuid.webm) or the original local path on failure.
+ */
+async function uploadVideoToStorage(localPath: string): Promise<string> {
+  try {
+    return await objectStorageService.uploadVideoFile(localPath);
+  } catch (err) {
+    logger.warn({ err, localPath }, "Failed to upload video to object storage; keeping local path");
+    return localPath;
+  }
+}
+
+function computeNextRunAt(schedule: string | null): string | null {
+  if (!schedule) return null;
+  try {
+    return CronExpressionParser.parse(schedule).next().toDate().toISOString();
+  } catch {
+    return null;
+  }
+}
 
 const router: IRouter = Router();
 
@@ -90,6 +122,39 @@ function buildSelector(el: ExtractedElement): string {
   return el.cssSelector;
 }
 
+function serializeSimulation(s: typeof simulationsTable.$inferSelect, recentPassRate: number | null = null) {
+  return {
+    ...s,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+    lastRunAt: s.lastRunAt ? s.lastRunAt.toISOString() : null,
+    lastAlertedAt: s.lastAlertedAt ? s.lastAlertedAt.toISOString() : null,
+    nextRunAt: computeNextRunAt(s.schedule),
+    recentPassRate,
+  };
+}
+
+async function computeRecentPassRates(simIds: number[]): Promise<Map<number, number | null>> {
+  if (simIds.length === 0) return new Map();
+  const rows = await db.execute(sql<{ simulation_id: number; pass_rate: number | null }>`
+    SELECT simulation_id, SUM(passed_steps)::float / NULLIF(SUM(total_steps), 0) AS pass_rate
+    FROM (
+      SELECT simulation_id, passed_steps, total_steps,
+        ROW_NUMBER() OVER (PARTITION BY simulation_id ORDER BY started_at DESC) AS rn
+      FROM simulation_runs
+      WHERE simulation_id = ANY(ARRAY[${sql.raw(simIds.join(","))}])
+        AND status IN ('passed', 'failed', 'partial')
+    ) ranked
+    WHERE rn <= 5
+    GROUP BY simulation_id
+  `);
+  const map = new Map<number, number | null>();
+  for (const row of rows.rows as Array<{ simulation_id: number; pass_rate: string | null }>) {
+    map.set(Number(row.simulation_id), row.pass_rate !== null ? parseFloat(row.pass_rate) : null);
+  }
+  return map;
+}
+
 async function detectStepsFromUrl(url: string, appName: string) {
   let browser = null;
   let context = null;
@@ -109,11 +174,6 @@ async function detectStepsFromUrl(url: string, appName: string) {
       () => ((document as unknown as { body: { innerText: string } }).body.innerText ?? "").toLowerCase(),
     );
 
-    /* Accessibility tree analysis.
-     * page.accessibility was deprecated in Playwright v1.8 and its type declarations
-     * were subsequently removed; however the runtime API remains present in current
-     * Playwright builds. We call it through a narrowly-scoped cast, with a typed
-     * locator-based fallback when it returns nothing (e.g., blank/protected pages). */
     type AxNode = { role?: string; name?: string; children?: AxNode[] };
     type AxPage = typeof page & { accessibility: { snapshot(): Promise<AxNode | null> } };
     const axPage = page as AxPage;
@@ -131,8 +191,6 @@ async function detectStepsFromUrl(url: string, appName: string) {
       walkSnapshot(snapshot);
     }
 
-    /* Supplement with typed locator queries for signals the snapshot may miss
-     * (e.g., password inputs whose role is reported as "textbox" without name) */
     const [axEmailCount, axPasswordCount, axSignupBtnCount, axPhoneCount,
            axOtpCount, axCheckboxCount, axRadioCount, axPlanBtnCount] = await Promise.all([
       page.getByRole("textbox", { name: /email|e-mail/i }).count(),
@@ -680,20 +738,135 @@ router.get("/simulations/stats", async (req, res): Promise<void> => {
   });
 });
 
+router.post("/simulations/webhook/:token", async (req, res): Promise<void> => {
+  const token = req.params.token;
+
+  const [simulation] = await db
+    .select()
+    .from(simulationsTable)
+    .where(eq(simulationsTable.webhookToken, token));
+
+  if (!simulation) {
+    res.status(404).json({ error: "Webhook token not found" });
+    return;
+  }
+
+  if (!simulation.webhookEnabled) {
+    res.status(403).json({ error: "Webhook is disabled for this simulation" });
+    return;
+  }
+
+  const steps = simulation.steps as Array<{
+    order: number;
+    name: string;
+    description: string;
+    fields: string[];
+    stepType: string;
+    selector?: string;
+    actionType?: string;
+    confidence?: string;
+  }>;
+
+  const [run] = await db
+    .insert(simulationRunsTable)
+    .values({
+      simulationId: simulation.id,
+      status: "running",
+      totalSteps: steps.length,
+      passedSteps: 0,
+      failedSteps: 0,
+      headedMode: false,
+    })
+    .returning();
+
+  logger.info({ simulationId: simulation.id, runId: run.id }, "Webhook-triggered run queued");
+
+  res.status(202).json({
+    runId: run.id,
+    simulationId: simulation.id,
+    status: "running",
+  });
+
+  setImmediate(async () => {
+    const runStart = Date.now();
+    let stepResults: Array<{
+      stepOrder: number;
+      stepName: string;
+      status: string;
+      durationMs: number;
+      generatedData: Record<string, unknown>;
+      errorMessage: string | null;
+      screenshot: string | null;
+      selectorUsed: string | null;
+      actionTaken: string | null;
+    }>;
+    let videoPath: string | null = null;
+
+    try {
+      const runResult = await runSimulation(simulation.appUrl, steps, {
+        headedMode: false,
+        timeoutMs: 15000,
+      });
+      stepResults = runResult.stepResults;
+      if (runResult.videoPath) {
+        videoPath = await uploadVideoToStorage(runResult.videoPath);
+      }
+    } catch (err) {
+      stepResults = steps.map((step) => ({
+        stepOrder: step.order,
+        stepName: step.name,
+        status: "failed",
+        durationMs: 0,
+        generatedData: {},
+        errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
+        screenshot: null,
+        selectorUsed: null,
+        actionTaken: null,
+      }));
+    }
+
+    const passedSteps = stepResults.filter((s) => s.status === "passed").length;
+    const failedSteps = stepResults.filter((s) => s.status === "failed").length;
+    const totalDuration = Date.now() - runStart;
+    const overallStatus = failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial";
+
+    await db
+      .update(simulationRunsTable)
+      .set({
+        status: overallStatus,
+        passedSteps,
+        failedSteps,
+        durationMs: totalDuration,
+        videoPath,
+        stepResults,
+        completedAt: new Date(),
+      })
+      .where(eq(simulationRunsTable.id, run.id));
+
+    await db
+      .update(simulationsTable)
+      .set({
+        totalRuns: sql`${simulationsTable.totalRuns} + 1`,
+        lastRunStatus: overallStatus,
+        lastRunAt: new Date(),
+      })
+      .where(eq(simulationsTable.id, simulation.id));
+
+    const passRate = steps.length > 0 ? passedSteps / steps.length : 0;
+    await checkAndSendAlert(simulation.id, simulation.name, passRate);
+
+    logger.info({ simulationId: simulation.id, runId: run.id, overallStatus }, "Webhook-triggered run complete");
+  });
+});
+
 router.get("/simulations", async (req, res): Promise<void> => {
   const simulations = await db
     .select()
     .from(simulationsTable)
     .orderBy(desc(simulationsTable.createdAt));
 
-  res.json(
-    simulations.map((s) => ({
-      ...s,
-      createdAt: s.createdAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString(),
-      lastRunAt: s.lastRunAt ? s.lastRunAt.toISOString() : null,
-    })),
-  );
+  const passRates = await computeRecentPassRates(simulations.map((s) => s.id));
+  res.json(simulations.map((s) => serializeSimulation(s, passRates.get(s.id) ?? null)));
 });
 
 router.post("/simulations", async (req, res): Promise<void> => {
@@ -717,15 +890,11 @@ router.post("/simulations", async (req, res): Promise<void> => {
       appUrl: parsed.data.appUrl,
       appType: parsed.data.appType,
       steps: parsed.data.steps,
+      webhookToken: randomUUID(),
     })
     .returning();
 
-  res.status(201).json({
-    ...simulation,
-    createdAt: simulation.createdAt.toISOString(),
-    updatedAt: simulation.updatedAt.toISOString(),
-    lastRunAt: simulation.lastRunAt ? simulation.lastRunAt.toISOString() : null,
-  });
+  res.status(201).json(serializeSimulation(simulation));
 });
 
 router.get("/simulations/:id", async (req, res): Promise<void> => {
@@ -745,12 +914,8 @@ router.get("/simulations/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({
-    ...simulation,
-    createdAt: simulation.createdAt.toISOString(),
-    updatedAt: simulation.updatedAt.toISOString(),
-    lastRunAt: simulation.lastRunAt ? simulation.lastRunAt.toISOString() : null,
-  });
+  const passRates = await computeRecentPassRates([simulation.id]);
+  res.json(serializeSimulation(simulation, passRates.get(simulation.id) ?? null));
 });
 
 router.patch("/simulations/:id", async (req, res): Promise<void> => {
@@ -774,12 +939,41 @@ router.patch("/simulations/:id", async (req, res): Promise<void> => {
     }
   }
 
+  if (parsed.data.alertThreshold !== null && parsed.data.alertThreshold !== undefined) {
+    if (parsed.data.alertThreshold < 0 || parsed.data.alertThreshold > 100) {
+      res.status(400).json({ error: "alertThreshold must be between 0 and 100" });
+      return;
+    }
+  }
+
+  if (parsed.data.schedule !== null && parsed.data.schedule !== undefined) {
+    try {
+      CronExpressionParser.parse(parsed.data.schedule);
+    } catch {
+      res.status(400).json({ error: "Invalid cron expression for schedule" });
+      return;
+    }
+  }
+
   const updateData: Partial<typeof simulationsTable.$inferInsert> = {};
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.appName !== undefined) updateData.appName = parsed.data.appName;
   if (parsed.data.appUrl !== undefined) updateData.appUrl = parsed.data.appUrl;
   if (parsed.data.appType !== undefined) updateData.appType = parsed.data.appType;
   if (parsed.data.steps !== undefined) updateData.steps = parsed.data.steps;
+
+  if (parsed.data.schedule !== undefined) updateData.schedule = parsed.data.schedule;
+  if (parsed.data.alertThreshold !== undefined) updateData.alertThreshold = parsed.data.alertThreshold;
+  if (parsed.data.alertDestination !== undefined) updateData.alertDestination = parsed.data.alertDestination;
+  if (parsed.data.webhookEnabled !== undefined) updateData.webhookEnabled = parsed.data.webhookEnabled;
+
+  const [existing] = await db
+    .select({ webhookToken: simulationsTable.webhookToken })
+    .from(simulationsTable)
+    .where(eq(simulationsTable.id, params.data.id));
+  if (existing && !existing.webhookToken) {
+    updateData.webhookToken = randomUUID();
+  }
 
   const [simulation] = await db
     .update(simulationsTable)
@@ -792,12 +986,16 @@ router.patch("/simulations/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({
-    ...simulation,
-    createdAt: simulation.createdAt.toISOString(),
-    updatedAt: simulation.updatedAt.toISOString(),
-    lastRunAt: simulation.lastRunAt ? simulation.lastRunAt.toISOString() : null,
-  });
+  if (parsed.data.schedule !== undefined) {
+    if (simulation.schedule) {
+      registerSchedule(simulation.id, simulation.schedule);
+    } else {
+      unregisterSchedule(simulation.id);
+    }
+  }
+
+  const patchPassRates = await computeRecentPassRates([simulation.id]);
+  res.json(serializeSimulation(simulation, patchPassRates.get(simulation.id) ?? null));
 });
 
 router.delete("/simulations/:id", async (req, res): Promise<void> => {
@@ -806,6 +1004,8 @@ router.delete("/simulations/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  unregisterSchedule(params.data.id);
 
   const [simulation] = await db
     .delete(simulationsTable)
@@ -904,7 +1104,9 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
       timeoutMs: 15000,
     });
     stepResults = runResult.stepResults;
-    videoPath = runResult.videoPath;
+    if (runResult.videoPath) {
+      videoPath = await uploadVideoToStorage(runResult.videoPath);
+    }
   } catch (err) {
     logger.error({ err, simulationId: id }, "Engine run failed");
     stepResults = steps.map((step) => ({
@@ -950,6 +1152,9 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     })
     .where(eq(simulationsTable.id, id));
 
+  const passRate = steps.length > 0 ? passedSteps / steps.length : 0;
+  await checkAndSendAlert(id, simulation.name, passRate);
+
   logger.info(
     { simulationId: id, runId: run.id, overallStatus, passedSteps, failedSteps },
     "Run complete",
@@ -983,12 +1188,74 @@ router.get("/simulations/:id/runs/:runId", async (req, res): Promise<void> => {
     return;
   }
 
+  const videoUrl = run.videoPath
+    ? `/api/simulations/${id}/runs/${runId}/video`
+    : null;
+
   res.json({
     ...run,
     stepResults: run.stepResults ?? [],
     startedAt: run.startedAt.toISOString(),
     completedAt: run.completedAt ? run.completedAt.toISOString() : null,
+    videoUrl,
   });
+});
+
+router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const rawRunId = Array.isArray(req.params.runId) ? req.params.runId[0] : req.params.runId;
+  const id = parseInt(rawId, 10);
+  const runId = parseInt(rawRunId, 10);
+
+  if (isNaN(id) || isNaN(runId)) {
+    res.status(400).json({ error: "Invalid ID" });
+    return;
+  }
+
+  const [run] = await db
+    .select({ id: simulationRunsTable.id, simulationId: simulationRunsTable.simulationId, videoPath: simulationRunsTable.videoPath })
+    .from(simulationRunsTable)
+    .where(eq(simulationRunsTable.id, runId));
+
+  if (!run || run.simulationId !== id) {
+    res.status(404).json({ error: "Run not found" });
+    return;
+  }
+
+  if (!run.videoPath) {
+    res.status(404).json({ error: "No video recorded for this run" });
+    return;
+  }
+
+  // GCS-backed path: serve from object storage
+  if (run.videoPath.startsWith("/objects/")) {
+    try {
+      const file = await objectStorageService.getObjectEntityFile(run.videoPath);
+      const response = await objectStorageService.downloadObject(file, 3600);
+      res.setHeader("Content-Type", response.headers.get("Content-Type") ?? "video/webm");
+      const cl = response.headers.get("Content-Length");
+      if (cl) res.setHeader("Content-Length", cl);
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      Readable.fromWeb(response.body as unknown as NodeWebStream<Uint8Array>).pipe(res);
+    } catch {
+      res.status(410).json({ error: "Video no longer available in storage" });
+    }
+    return;
+  }
+
+  // Legacy local file path (fallback for pre-GCS runs)
+  if (!fs.existsSync(run.videoPath)) {
+    res.status(410).json({ error: "Video file no longer available" });
+    return;
+  }
+
+  const stat = fs.statSync(run.videoPath);
+  res.setHeader("Content-Type", "video/webm");
+  res.setHeader("Content-Length", stat.size);
+  res.setHeader("Cache-Control", "private, max-age=3600");
+
+  const stream = fs.createReadStream(run.videoPath);
+  stream.pipe(res);
 });
 
 export default router;

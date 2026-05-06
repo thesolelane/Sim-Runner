@@ -80,6 +80,13 @@ export const GetSimulationStatsResponse = zod.object({
 });
 
 /**
+ * @summary Trigger a simulation run via webhook token
+ */
+export const TriggerWebhookParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+/**
  * @summary List all simulations
  */
 export const ListSimulationsResponseItem = zod.object({
@@ -104,6 +111,26 @@ export const ListSimulationsResponseItem = zod.object({
   totalRuns: zod.number(),
   lastRunStatus: zod.string().nullable(),
   lastRunAt: zod.string().nullable(),
+  schedule: zod.string().nullable(),
+  alertThreshold: zod.number().nullable(),
+  alertDestination: zod.string().nullable(),
+  webhookToken: zod.string().nullable(),
+  webhookEnabled: zod
+    .boolean()
+    .describe("Whether the webhook trigger endpoint is active"),
+  lastAlertedAt: zod.string().nullable(),
+  nextRunAt: zod
+    .string()
+    .nullable()
+    .describe(
+      "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+    ),
+  recentPassRate: zod
+    .number()
+    .nullable()
+    .describe(
+      "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -161,6 +188,26 @@ export const GetSimulationResponse = zod.object({
   totalRuns: zod.number(),
   lastRunStatus: zod.string().nullable(),
   lastRunAt: zod.string().nullable(),
+  schedule: zod.string().nullable(),
+  alertThreshold: zod.number().nullable(),
+  alertDestination: zod.string().nullable(),
+  webhookToken: zod.string().nullable(),
+  webhookEnabled: zod
+    .boolean()
+    .describe("Whether the webhook trigger endpoint is active"),
+  lastAlertedAt: zod.string().nullable(),
+  nextRunAt: zod
+    .string()
+    .nullable()
+    .describe(
+      "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+    ),
+  recentPassRate: zod
+    .number()
+    .nullable()
+    .describe(
+      "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -192,6 +239,28 @@ export const UpdateSimulationBody = zod.object({
       }),
     )
     .optional(),
+  schedule: zod
+    .string()
+    .nullish()
+    .describe(
+      "Cron expression for scheduled runs (e.g. '0 \* \* \* \*' for hourly), or null to disable",
+    ),
+  alertThreshold: zod
+    .number()
+    .nullish()
+    .describe(
+      "Pass rate threshold (0-100) below which an alert is sent, or null to disable",
+    ),
+  alertDestination: zod
+    .string()
+    .nullish()
+    .describe(
+      "Slack webhook URL or email address for alerts, or null to disable",
+    ),
+  webhookEnabled: zod
+    .boolean()
+    .optional()
+    .describe("Enable or disable the webhook trigger endpoint"),
 });
 
 export const UpdateSimulationResponse = zod.object({
@@ -216,6 +285,26 @@ export const UpdateSimulationResponse = zod.object({
   totalRuns: zod.number(),
   lastRunStatus: zod.string().nullable(),
   lastRunAt: zod.string().nullable(),
+  schedule: zod.string().nullable(),
+  alertThreshold: zod.number().nullable(),
+  alertDestination: zod.string().nullable(),
+  webhookToken: zod.string().nullable(),
+  webhookEnabled: zod
+    .boolean()
+    .describe("Whether the webhook trigger endpoint is active"),
+  lastAlertedAt: zod.string().nullable(),
+  nextRunAt: zod
+    .string()
+    .nullable()
+    .describe(
+      "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+    ),
+  recentPassRate: zod
+    .number()
+    .nullable()
+    .describe(
+      "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
+    ),
   createdAt: zod.string(),
   updatedAt: zod.string(),
 });
@@ -281,6 +370,12 @@ export const GetRunResponse = zod.object({
   durationMs: zod.number().nullable(),
   headedMode: zod.boolean(),
   videoPath: zod.string().nullable(),
+  videoUrl: zod
+    .string()
+    .nullable()
+    .describe(
+      "URL to stream the recorded video, or null if no recording exists",
+    ),
   startedAt: zod.string(),
   completedAt: zod.string().nullable(),
   stepResults: zod.array(
@@ -305,4 +400,46 @@ export const GetRunResponse = zod.object({
         .describe("Description of the action performed"),
     }),
   ),
+});
+
+/**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1).describe("Original file name."),
+  size: zod.number().min(1).describe("File size in bytes."),
+  contentType: zod
+    .string()
+    .min(1)
+    .describe("MIME type of the file (e.g. image\/jpeg)."),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url().describe("Presigned GCS URL for PUT upload."),
+  objectPath: zod
+    .string()
+    .describe(
+      "Normalized object path (e.g. \/objects\/uploads\/uuid). Store this in your database.",
+    ),
+  metadata: zod
+    .object({
+      name: zod.string().min(1).describe("Original file name."),
+      size: zod.number().min(1).describe("File size in bytes."),
+      contentType: zod
+        .string()
+        .min(1)
+        .describe("MIME type of the file (e.g. image\/jpeg)."),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+export const GetPublicObjectParams = zod.object({
+  filePath: zod.coerce.string(),
 });

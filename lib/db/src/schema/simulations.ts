@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -22,6 +22,12 @@ export const simulationsTable = pgTable("simulations", {
   totalRuns: integer("total_runs").notNull().default(0),
   lastRunStatus: text("last_run_status"),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  schedule: text("schedule"),
+  alertThreshold: integer("alert_threshold"),
+  alertDestination: text("alert_destination"),
+  webhookToken: text("webhook_token").unique(),
+  webhookEnabled: boolean("webhook_enabled").notNull().default(true),
+  lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

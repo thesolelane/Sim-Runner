@@ -13,6 +13,38 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface RequestUploadUrlBody {
+  /**
+   * Original file name.
+   * @minLength 1
+   */
+  name: string;
+  /**
+   * File size in bytes.
+   * @minimum 1
+   */
+  size: number;
+  /**
+   * MIME type of the file (e.g. image/jpeg).
+   * @minLength 1
+   */
+  contentType: string;
+}
+
+export interface RequestUploadUrlResponse {
+  /** Presigned GCS URL for PUT upload. */
+  uploadURL: string;
+  /** Normalized object path (e.g. /objects/uploads/uuid). Store this in your database. */
+  objectPath: string;
+  metadata?: RequestUploadUrlBody;
+}
+
+export interface WebhookTriggerResponse {
+  runId: number;
+  simulationId: number;
+  status: string;
+}
+
 export interface ScanUrlBody {
   url: string;
   appName: string;
@@ -67,6 +99,23 @@ export interface UpdateSimulationBody {
   appUrl?: string;
   appType?: string;
   steps?: FlowStep[];
+  /**
+   * Cron expression for scheduled runs (e.g. '0 * * * *' for hourly), or null to disable
+   * @nullable
+   */
+  schedule?: string | null;
+  /**
+   * Pass rate threshold (0-100) below which an alert is sent, or null to disable
+   * @nullable
+   */
+  alertThreshold?: number | null;
+  /**
+   * Slack webhook URL or email address for alerts, or null to disable
+   * @nullable
+   */
+  alertDestination?: string | null;
+  /** Enable or disable the webhook trigger endpoint */
+  webhookEnabled?: boolean;
 }
 
 export interface CreateRunBody {
@@ -86,6 +135,28 @@ export interface Simulation {
   lastRunStatus: string | null;
   /** @nullable */
   lastRunAt: string | null;
+  /** @nullable */
+  schedule: string | null;
+  /** @nullable */
+  alertThreshold: number | null;
+  /** @nullable */
+  alertDestination: string | null;
+  /** @nullable */
+  webhookToken: string | null;
+  /** Whether the webhook trigger endpoint is active */
+  webhookEnabled: boolean;
+  /** @nullable */
+  lastAlertedAt: string | null;
+  /**
+   * ISO 8601 datetime of the next scheduled run, or null if no schedule
+   * @nullable
+   */
+  nextRunAt: string | null;
+  /**
+   * Pass rate (0–1) computed from the last 5 completed runs, or null if no runs
+   * @nullable
+   */
+  recentPassRate: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -146,6 +217,11 @@ export interface SimulationRunDetail {
   headedMode: boolean;
   /** @nullable */
   videoPath: string | null;
+  /**
+   * URL to stream the recorded video, or null if no recording exists
+   * @nullable
+   */
+  videoUrl: string | null;
   startedAt: string;
   /** @nullable */
   completedAt: string | null;

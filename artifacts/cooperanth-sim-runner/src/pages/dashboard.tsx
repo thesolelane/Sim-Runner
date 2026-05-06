@@ -1,18 +1,49 @@
 import { Link } from "wouter";
 import { format } from "date-fns";
+import cronstrue from "cronstrue";
 import { 
   useGetSimulationStats, 
   useListSimulations 
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Activity, CheckCircle2, XCircle, Clock, Play } from "lucide-react";
+import { Plus, Activity, CheckCircle2, XCircle, Clock, AlertTriangle, Radio, Wifi } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+
+function getHealthColor(lastRunStatus: string | null, alertThreshold: number | null, recentPassRate: number | null) {
+  if (!lastRunStatus || recentPassRate === null) return "gray";
+  const threshold = (alertThreshold ?? 80) / 100;
+  if (recentPassRate >= threshold) return "green";
+  if (recentPassRate >= threshold * 0.8) return "amber";
+  return "red";
+}
+
+function HealthDot({ color }: { color: string }) {
+  const colorMap: Record<string, string> = {
+    green: "bg-green-500",
+    amber: "bg-amber-400",
+    red: "bg-red-500",
+    gray: "bg-muted-foreground/30",
+  };
+  return (
+    <span className={`inline-block h-2.5 w-2.5 rounded-full ${colorMap[color] ?? colorMap.gray}`} />
+  );
+}
+
+function cronLabel(expr: string) {
+  try {
+    return cronstrue.toString(expr, { verbose: false });
+  } catch {
+    return expr;
+  }
+}
 
 export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useGetSimulationStats();
   const { data: simulations, isLoading: simsLoading } = useListSimulations();
+
+  const monitoredSims = simulations?.filter(s => s.schedule) ?? [];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -75,6 +106,91 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="h-5 w-5" />
+              Monitoring
+            </CardTitle>
+            <CardDescription>Scheduled simulations and their health status.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {simsLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            ) : monitoredSims.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No simulations have a schedule yet. Open a simulation's Settings tab to configure one.
+              </p>
+            ) : (
+              <div className="rounded-md border">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Simulation</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Schedule</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Health</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Last Alert</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Alert Threshold</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border bg-card">
+                    {monitoredSims.map((sim) => {
+                      const color = getHealthColor(sim.lastRunStatus, sim.alertThreshold, sim.recentPassRate);
+                      return (
+                        <tr key={sim.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <Link href={`/simulations/${sim.id}`} className="font-medium hover:underline">
+                              {sim.name}
+                            </Link>
+                            <div className="text-xs text-muted-foreground">{sim.appName}</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Wifi className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span>{cronLabel(sim.schedule!)}</span>
+                            </div>
+                            {sim.nextRunAt && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                Next: {format(new Date(sim.nextRunAt), "MMM d, HH:mm")}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <HealthDot color={color} />
+                              <span className="text-sm capitalize">
+                                {sim.lastRunStatus ?? "Never run"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
+                            {sim.lastAlertedAt
+                              ? format(new Date(sim.lastAlertedAt), "MMM d, HH:mm")
+                              : <span className="text-muted-foreground/50">—</span>}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {sim.alertThreshold !== null && sim.alertThreshold !== undefined ? (
+                              <Badge variant="outline" className="text-xs">
+                                <AlertTriangle className="mr-1 h-3 w-3" />
+                                &lt;{sim.alertThreshold}%
+                              </Badge>
+                            ) : (
+                              <span className="text-sm text-muted-foreground/50">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="col-span-2">
           <CardHeader>
@@ -114,6 +230,9 @@ export default function Dashboard() {
                           <Link href={`/simulations/${sim.id}`} className="font-medium hover:underline">
                             {sim.name}
                           </Link>
+                          {sim.schedule && (
+                            <Badge variant="secondary" className="ml-2 text-xs">scheduled</Badge>
+                          )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-muted-foreground">
                           {sim.appName}

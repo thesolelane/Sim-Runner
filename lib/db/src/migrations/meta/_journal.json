@@ -15,6 +15,20 @@
       "when": 1778000820000,
       "tag": "0001_add_headed_mode_video_path",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1746489600000,
+      "tag": "0002_add_monitoring_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1746576000000,
+      "tag": "0003_add_webhook_enabled",
+      "breakpoints": true
     }
   ]
 }

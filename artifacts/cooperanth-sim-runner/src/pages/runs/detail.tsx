@@ -126,6 +126,31 @@ export default function RunDetail() {
         </div>
       </div>
 
+      {run.videoUrl && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Video className="h-5 w-5 text-purple-600" />
+              Session Recording
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg overflow-hidden border bg-black">
+              <video
+                controls
+                className="w-full max-h-96"
+                src={run.videoUrl}
+              >
+                Your browser does not support the video element.
+              </video>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Full browser session recorded in headed mode. Video may no longer be available if the server was restarted.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Step Breakdown</CardTitle>
