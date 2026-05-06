@@ -5,6 +5,7 @@ import {
   useListRuns, 
   useCreateRun,
   useUpdateSimulation,
+  useTestAlert,
   getGetSimulationQueryKey,
   getListRunsQueryKey,
   getGetSimulationStatsQueryKey,
@@ -20,7 +21,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check } from "lucide-react";
+import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,8 +59,10 @@ export default function SimulationDetail() {
 
   const [headedMode, setHeadedMode] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [testAlertStatus, setTestAlertStatus] = useState<"idle" | "success" | "error">("idle");
   const createRunMutation = useCreateRun();
   const updateSimMutation = useUpdateSimulation();
+  const testAlertMutation = useTestAlert();
 
   const [schedulePreset, setSchedulePreset] = useState<string | null>(null);
   const [customCron, setCustomCron] = useState("");
@@ -129,6 +132,26 @@ export default function SimulationDetail() {
         onError: () => {
           toast({ title: "Save Failed", description: "Could not save settings.", variant: "destructive" });
         }
+      }
+    );
+  };
+
+  const handleSendTestAlert = () => {
+    setTestAlertStatus("idle");
+    testAlertMutation.mutate(
+      { id: simId, data: { destination: alertDestination.trim() } },
+      {
+        onSuccess: (data) => {
+          setTestAlertStatus("success");
+          toast({ title: "Test Alert Sent", description: data.message });
+          setTimeout(() => setTestAlertStatus("idle"), 4000);
+        },
+        onError: (err) => {
+          setTestAlertStatus("error");
+          const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Could not send test alert.";
+          toast({ title: "Test Alert Failed", description: message, variant: "destructive" });
+          setTimeout(() => setTestAlertStatus("idle"), 4000);
+        },
       }
     );
   };
@@ -388,11 +411,43 @@ export default function SimulationDetail() {
                 </div>
                 <div>
                   <Label className="mb-2 block text-sm">Alert destination</Label>
-                  <Input
-                    placeholder="Slack webhook URL or email address"
-                    value={alertDestination}
-                    onChange={(e) => setAlertDestination(e.target.value)}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Slack webhook URL or email address"
+                      value={alertDestination}
+                      onChange={(e) => {
+                        setAlertDestination(e.target.value);
+                        setTestAlertStatus("idle");
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSendTestAlert}
+                      disabled={!alertDestination.trim() || testAlertMutation.isPending}
+                      className={
+                        testAlertStatus === "success"
+                          ? "border-green-500 text-green-700 hover:bg-green-50"
+                          : testAlertStatus === "error"
+                          ? "border-red-500 text-red-700 hover:bg-red-50"
+                          : ""
+                      }
+                    >
+                      {testAlertMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : testAlertStatus === "success" ? (
+                        <Check className="h-4 w-4" />
+                      ) : testAlertStatus === "error" ? (
+                        <XCircle className="h-4 w-4" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                      <span className="ml-1.5 hidden sm:inline">
+                        {testAlertStatus === "success" ? "Sent!" : testAlertStatus === "error" ? "Failed" : "Test"}
+                      </span>
+                    </Button>
+                  </div>
                   {destHint && (
                     <p className="text-xs text-muted-foreground mt-1">Detected: {destHint}</p>
                   )}

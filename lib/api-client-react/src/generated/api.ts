@@ -29,6 +29,8 @@ import type {
   SimulationRun,
   SimulationRunDetail,
   SimulationStats,
+  TestAlertBody,
+  TestAlertResponse,
   UpdateSimulationBody,
   WebhookTriggerResponse,
 } from "./api.schemas";
@@ -780,6 +782,93 @@ export const useDeleteSimulation = <
   TContext
 > => {
   return useMutation(getDeleteSimulationMutationOptions(options));
+};
+
+/**
+ * @summary Send a test alert to the configured destination
+ */
+export const getTestAlertUrl = (id: number) => {
+  return `/api/simulations/${id}/test-alert`;
+};
+
+export const testAlert = async (
+  id: number,
+  testAlertBody?: TestAlertBody,
+  options?: RequestInit,
+): Promise<TestAlertResponse> => {
+  return customFetch<TestAlertResponse>(getTestAlertUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(testAlertBody),
+  });
+};
+
+export const getTestAlertMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testAlert>>,
+    TError,
+    { id: number; data: BodyType<TestAlertBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof testAlert>>,
+  TError,
+  { id: number; data: BodyType<TestAlertBody> },
+  TContext
+> => {
+  const mutationKey = ["testAlert"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof testAlert>>,
+    { id: number; data: BodyType<TestAlertBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return testAlert(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TestAlertMutationResult = NonNullable<
+  Awaited<ReturnType<typeof testAlert>>
+>;
+export type TestAlertMutationBody = BodyType<TestAlertBody>;
+export type TestAlertMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send a test alert to the configured destination
+ */
+export const useTestAlert = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof testAlert>>,
+    TError,
+    { id: number; data: BodyType<TestAlertBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof testAlert>>,
+  TError,
+  { id: number; data: BodyType<TestAlertBody> },
+  TContext
+> => {
+  return useMutation(getTestAlertMutationOptions(options));
 };
 
 /**

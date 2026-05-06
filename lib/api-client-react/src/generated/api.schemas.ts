@@ -39,6 +39,19 @@ export interface RequestUploadUrlResponse {
   metadata?: RequestUploadUrlBody;
 }
 
+export interface TestAlertBody {
+  /** Override destination to test (Slack webhook URL or email). Falls back to the simulation's saved destination if omitted. */
+  destination?: string;
+}
+
+export interface TestAlertResponse {
+  success: boolean;
+  message: string;
+  destination: string;
+  /** slack or email */
+  destinationType: string;
+}
+
 export interface WebhookTriggerResponse {
   runId: number;
   simulationId: number;

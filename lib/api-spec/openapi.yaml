@@ -205,6 +205,49 @@ paths:
         "204":
           description: Deleted
 
+  /simulations/{id}/test-alert:
+    post:
+      operationId: testAlert
+      tags: [simulations]
+      summary: Send a test alert to the configured destination
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestAlertBody"
+      responses:
+        "200":
+          description: Test alert sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestAlertResponse"
+        "400":
+          description: No alert destination configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Simulation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Failed to send test alert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /simulations/{id}/runs:
     get:
       operationId: listRuns
@@ -393,6 +436,31 @@ components:
           description: Normalized object path (e.g. /objects/uploads/uuid). Store this in your database.
         metadata:
           $ref: "#/components/schemas/RequestUploadUrlBody"
+
+    TestAlertBody:
+      type: object
+      properties:
+        destination:
+          type: string
+          description: "Override destination to test (Slack webhook URL or email). Falls back to the simulation's saved destination if omitted."
+
+    TestAlertResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        destination:
+          type: string
+        destinationType:
+          type: string
+          description: "slack or email"
+      required:
+        - success
+        - message
+        - destination
+        - destinationType
 
     WebhookTriggerResponse:
       type: object

@@ -56,6 +56,22 @@ async function sendEmailAlert(to: string, simulationName: string, passRate: numb
   return true;
 }
 
+export async function sendTestAlert(
+  destination: string,
+  simulationName: string,
+): Promise<{ destinationType: "slack" | "email" }> {
+  if (isSlackUrl(destination)) {
+    await sendSlackAlert(destination, simulationName, 0.75, 80);
+    return { destinationType: "slack" };
+  } else {
+    const dispatched = await sendEmailAlert(destination, simulationName, 0.75, 80);
+    if (!dispatched) {
+      throw new Error("Email could not be sent: SMTP_URL is not configured on this server");
+    }
+    return { destinationType: "email" };
+  }
+}
+
 export async function checkAndSendAlert(
   simulationId: number,
   simulationName: string,

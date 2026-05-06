@@ -317,6 +317,29 @@ export const DeleteSimulationParams = zod.object({
 });
 
 /**
+ * @summary Send a test alert to the configured destination
+ */
+export const TestAlertParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TestAlertBody = zod.object({
+  destination: zod
+    .string()
+    .optional()
+    .describe(
+      "Override destination to test (Slack webhook URL or email). Falls back to the simulation's saved destination if omitted.",
+    ),
+});
+
+export const TestAlertResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+  destination: zod.string(),
+  destinationType: zod.string().describe("slack or email"),
+});
+
+/**
  * @summary List all runs for a simulation
  */
 export const ListRunsParams = zod.object({

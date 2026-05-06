@@ -13,11 +13,12 @@ import {
   UpdateSimulationParams,
   DeleteSimulationParams,
   CreateRunBody,
+  TestAlertBody,
 } from "@workspace/api-zod";
 import { CronExpressionParser } from "cron-parser";
 import { runSimulation, NIX_LIB_PATHS } from "../lib/engine";
 import { registerSchedule, unregisterSchedule } from "../lib/scheduling";
-import { checkAndSendAlert } from "../lib/alerting";
+import { checkAndSendAlert, sendTestAlert } from "../lib/alerting";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
 import { randomUUID } from "crypto";
@@ -1018,6 +1019,56 @@ router.delete("/simulations/:id", async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+});
+
+router.post("/simulations/:id/test-alert", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid simulation ID" });
+    return;
+  }
+
+  const [simulation] = await db
+    .select({ id: simulationsTable.id, name: simulationsTable.name, alertDestination: simulationsTable.alertDestination })
+    .from(simulationsTable)
+    .where(eq(simulationsTable.id, id));
+
+  if (!simulation) {
+    res.status(404).json({ error: "Simulation not found" });
+    return;
+  }
+
+  const bodyParsed = TestAlertBody.safeParse(req.body ?? {});
+  if (!bodyParsed.success) {
+    res.status(400).json({ error: "Invalid request body" });
+    return;
+  }
+  const overrideDestination = bodyParsed.data.destination ?? null;
+  const destination = overrideDestination || simulation.alertDestination;
+
+  if (!destination) {
+    res.status(400).json({ error: "No alert destination configured. Set a Slack webhook URL or email address in Settings first." });
+    return;
+  }
+
+  try {
+    const { destinationType } = await sendTestAlert(destination, simulation.name);
+    req.log.info({ simulationId: id, destinationType }, "Test alert sent");
+    res.json({
+      success: true,
+      message: `Test alert sent successfully via ${destinationType}`,
+      destination,
+      destinationType,
+    });
+  } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    req.log.error({ err, simulationId: id }, "Failed to send test alert");
+    const userMessage = errMessage.startsWith("Email could not be sent") || errMessage.startsWith("Slack webhook")
+      ? errMessage
+      : "Failed to send test alert. Please verify your destination is correct and try again.";
+    res.status(500).json({ error: userMessage });
+  }
 });
 
 router.get("/simulations/:id/runs", async (req, res): Promise<void> => {
