@@ -833,6 +833,19 @@ router.post("/simulations/webhook/:token", async (req, res): Promise<void> => {
       }));
     }
 
+    let quantumScanResult = null;
+    if (simulation.pqcEnabled) {
+      try {
+        quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+        logger.info(
+          { simulationId: simulation.id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+          "Quantum scan complete (webhook run)",
+        );
+      } catch (err) {
+        logger.warn({ err, simulationId: simulation.id }, "Quantum scan failed — webhook run unaffected");
+      }
+    }
+
     const passedSteps = stepResults.filter((s) => s.status === "passed").length;
     const failedSteps = stepResults.filter((s) => s.status === "failed").length;
     const totalDuration = Date.now() - runStart;
@@ -847,6 +860,7 @@ router.post("/simulations/webhook/:token", async (req, res): Promise<void> => {
         durationMs: totalDuration,
         videoPath,
         stepResults,
+        quantumScanResult,
         completedAt: new Date(),
       })
       .where(eq(simulationRunsTable.id, run.id));
