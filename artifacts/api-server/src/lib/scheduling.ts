@@ -3,6 +3,7 @@ import { db, simulationsTable, simulationRunsTable } from "@workspace/db";
 import { and, eq, isNotNull, lt, sql } from "drizzle-orm";
 import { runSimulation } from "./engine";
 import { checkAndSendAlert } from "./alerting";
+import { scanQuantumSecurity } from "./quantum-scanner";
 import { ObjectStorageService } from "./objectStorage";
 import { logger } from "./logger";
 
@@ -76,6 +77,17 @@ async function executeScheduledRun(simulationId: number): Promise<void> {
     }));
   }
 
+  let quantumScanResult = null;
+  try {
+    quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+    logger.info(
+      { simulationId, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+      "Quantum scan complete (scheduled run)",
+    );
+  } catch (err) {
+    logger.warn({ err, simulationId }, "Quantum scan failed — scheduled run unaffected");
+  }
+
   const passedSteps = stepResults.filter((s) => s.status === "passed").length;
   const failedSteps = stepResults.filter((s) => s.status === "failed").length;
   const totalDuration = Date.now() - runStart;
@@ -93,6 +105,7 @@ async function executeScheduledRun(simulationId: number): Promise<void> {
       headedMode: false,
       videoPath,
       stepResults,
+      quantumScanResult,
       completedAt: new Date(),
     });
 

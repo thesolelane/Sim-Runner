@@ -20,6 +20,7 @@ import { runSimulation, NIX_LIB_PATHS } from "../lib/engine";
 import { registerSchedule, unregisterSchedule } from "../lib/scheduling";
 import { checkAndSendAlert, sendTestAlert } from "../lib/alerting";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { scanQuantumSecurity } from "../lib/quantum-scanner";
 import { logger } from "../lib/logger";
 import { randomUUID } from "crypto";
 
@@ -1201,6 +1202,17 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     }));
   }
 
+  let quantumScanResult = null;
+  try {
+    quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+    logger.info(
+      { simulationId: id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+      "Quantum scan complete",
+    );
+  } catch (err) {
+    logger.warn({ err, simulationId: id }, "Quantum scan failed — run result unaffected");
+  }
+
   const passedSteps = stepResults.filter((s) => s.status === "passed").length;
   const failedSteps = stepResults.filter((s) => s.status === "failed").length;
   const totalDuration = Date.now() - runStart;
@@ -1218,6 +1230,7 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
       headedMode,
       videoPath,
       stepResults,
+      quantumScanResult,
       completedAt: new Date(),
     })
     .returning();
@@ -1274,6 +1287,7 @@ router.get("/simulations/:id/runs/:runId", async (req, res): Promise<void> => {
   res.json({
     ...run,
     stepResults: run.stepResults ?? [],
+    quantumScanResult: run.quantumScanResult ?? null,
     startedAt: run.startedAt.toISOString(),
     completedAt: run.completedAt ? run.completedAt.toISOString() : null,
     videoUrl,

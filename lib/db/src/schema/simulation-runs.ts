@@ -3,6 +3,9 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { simulationsTable } from "./simulations";
 
+// Migration SQL (run via psql $DATABASE_URL for non-interactive migrations):
+// ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS quantum_scan_result jsonb;
+
 export const simulationRunsTable = pgTable("simulation_runs", {
   id: serial("id").primaryKey(),
   simulationId: integer("simulation_id").notNull().references(() => simulationsTable.id, { onDelete: "cascade" }),
@@ -24,6 +27,21 @@ export const simulationRunsTable = pgTable("simulation_runs", {
     selectorUsed: string | null;
     actionTaken: string | null;
   }>>(),
+  quantumScanResult: jsonb("quantum_scan_result").$type<{
+    quantumSafe: boolean;
+    tlsVersion: string | null;
+    keyExchange: string | null;
+    cipherSuite: string | null;
+    certSignatureAlgorithm: string | null;
+    findings: Array<{
+      field: string;
+      detectedValue: string;
+      severity: "info" | "warning" | "critical";
+      explanation: string;
+    }>;
+    scannedAt: string;
+    error: string | null;
+  }>(),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });

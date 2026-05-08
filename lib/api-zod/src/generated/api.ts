@@ -75,6 +75,71 @@ export const GetSimulationStatsResponse = zod.object({
       videoPath: zod.string().nullable(),
       startedAt: zod.string(),
       completedAt: zod.string().nullable(),
+      quantumScanResult: zod
+        .object({
+          quantumSafe: zod
+            .boolean()
+            .describe(
+              "True only when a post-quantum hybrid key exchange was detected and no critical findings exist",
+            ),
+          tlsVersion: zod
+            .string()
+            .nullable()
+            .describe("Negotiated TLS protocol version (e.g. TLSv1.3)"),
+          keyExchange: zod
+            .string()
+            .nullable()
+            .describe(
+              "Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)",
+            ),
+          cipherSuite: zod
+            .string()
+            .nullable()
+            .describe("Full cipher suite name (e.g. TLS_AES_256_GCM_SHA384)"),
+          certSignatureAlgorithm: zod
+            .string()
+            .nullable()
+            .describe(
+              "Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)",
+            ),
+          findings: zod
+            .array(
+              zod.object({
+                field: zod
+                  .string()
+                  .describe(
+                    "The TLS attribute being reported (e.g. 'Key Exchange', 'TLS Version')",
+                  ),
+                detectedValue: zod
+                  .string()
+                  .describe("The value detected during the scan"),
+                severity: zod
+                  .enum(["info", "warning", "critical"])
+                  .describe("Severity of the finding"),
+                explanation: zod
+                  .string()
+                  .describe(
+                    "Plain-English explanation of why this finding matters",
+                  ),
+              }),
+            )
+            .describe(
+              "List of individual findings with severity and explanation",
+            ),
+          scannedAt: zod
+            .string()
+            .describe("ISO 8601 timestamp of when the scan was performed"),
+          error: zod
+            .string()
+            .nullable()
+            .describe(
+              "Error message if the scan failed (e.g. timeout, unreachable host)",
+            ),
+        })
+        .nullish()
+        .describe(
+          "Post-quantum TLS security scan result, or null for older runs",
+        ),
     }),
   ),
 });
@@ -423,6 +488,65 @@ export const ListRunsResponseItem = zod.object({
   videoPath: zod.string().nullable(),
   startedAt: zod.string(),
   completedAt: zod.string().nullable(),
+  quantumScanResult: zod
+    .object({
+      quantumSafe: zod
+        .boolean()
+        .describe(
+          "True only when a post-quantum hybrid key exchange was detected and no critical findings exist",
+        ),
+      tlsVersion: zod
+        .string()
+        .nullable()
+        .describe("Negotiated TLS protocol version (e.g. TLSv1.3)"),
+      keyExchange: zod
+        .string()
+        .nullable()
+        .describe(
+          "Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)",
+        ),
+      cipherSuite: zod
+        .string()
+        .nullable()
+        .describe("Full cipher suite name (e.g. TLS_AES_256_GCM_SHA384)"),
+      certSignatureAlgorithm: zod
+        .string()
+        .nullable()
+        .describe("Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)"),
+      findings: zod
+        .array(
+          zod.object({
+            field: zod
+              .string()
+              .describe(
+                "The TLS attribute being reported (e.g. 'Key Exchange', 'TLS Version')",
+              ),
+            detectedValue: zod
+              .string()
+              .describe("The value detected during the scan"),
+            severity: zod
+              .enum(["info", "warning", "critical"])
+              .describe("Severity of the finding"),
+            explanation: zod
+              .string()
+              .describe(
+                "Plain-English explanation of why this finding matters",
+              ),
+          }),
+        )
+        .describe("List of individual findings with severity and explanation"),
+      scannedAt: zod
+        .string()
+        .describe("ISO 8601 timestamp of when the scan was performed"),
+      error: zod
+        .string()
+        .nullable()
+        .describe(
+          "Error message if the scan failed (e.g. timeout, unreachable host)",
+        ),
+    })
+    .nullish()
+    .describe("Post-quantum TLS security scan result, or null for older runs"),
 });
 export const ListRunsResponse = zod.array(ListRunsResponseItem);
 
@@ -488,6 +612,72 @@ export const GetRunResponse = zod.object({
         .describe("Description of the action performed"),
     }),
   ),
+  quantumScanResult: zod
+    .union([
+      zod.object({
+        quantumSafe: zod
+          .boolean()
+          .describe(
+            "True only when a post-quantum hybrid key exchange was detected and no critical findings exist",
+          ),
+        tlsVersion: zod
+          .string()
+          .nullable()
+          .describe("Negotiated TLS protocol version (e.g. TLSv1.3)"),
+        keyExchange: zod
+          .string()
+          .nullable()
+          .describe(
+            "Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)",
+          ),
+        cipherSuite: zod
+          .string()
+          .nullable()
+          .describe("Full cipher suite name (e.g. TLS_AES_256_GCM_SHA384)"),
+        certSignatureAlgorithm: zod
+          .string()
+          .nullable()
+          .describe(
+            "Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)",
+          ),
+        findings: zod
+          .array(
+            zod.object({
+              field: zod
+                .string()
+                .describe(
+                  "The TLS attribute being reported (e.g. 'Key Exchange', 'TLS Version')",
+                ),
+              detectedValue: zod
+                .string()
+                .describe("The value detected during the scan"),
+              severity: zod
+                .enum(["info", "warning", "critical"])
+                .describe("Severity of the finding"),
+              explanation: zod
+                .string()
+                .describe(
+                  "Plain-English explanation of why this finding matters",
+                ),
+            }),
+          )
+          .describe(
+            "List of individual findings with severity and explanation",
+          ),
+        scannedAt: zod
+          .string()
+          .describe("ISO 8601 timestamp of when the scan was performed"),
+        error: zod
+          .string()
+          .nullable()
+          .describe(
+            "Error message if the scan failed (e.g. timeout, unreachable host)",
+          ),
+      }),
+      zod.null(),
+    ])
+    .optional()
+    .describe("Post-quantum TLS security scan result, or null for older runs"),
 });
 
 /**

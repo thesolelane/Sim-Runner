@@ -225,6 +225,63 @@ export interface StepResult {
   actionTaken?: string | null;
 }
 
+/**
+ * Severity of the finding
+ */
+export type QuantumFindingSeverity =
+  (typeof QuantumFindingSeverity)[keyof typeof QuantumFindingSeverity];
+
+export const QuantumFindingSeverity = {
+  info: "info",
+  warning: "warning",
+  critical: "critical",
+} as const;
+
+export interface QuantumFinding {
+  /** The TLS attribute being reported (e.g. 'Key Exchange', 'TLS Version') */
+  field: string;
+  /** The value detected during the scan */
+  detectedValue: string;
+  /** Severity of the finding */
+  severity: QuantumFindingSeverity;
+  /** Plain-English explanation of why this finding matters */
+  explanation: string;
+}
+
+export interface QuantumScanResult {
+  /** True only when a post-quantum hybrid key exchange was detected and no critical findings exist */
+  quantumSafe: boolean;
+  /**
+   * Negotiated TLS protocol version (e.g. TLSv1.3)
+   * @nullable
+   */
+  tlsVersion: string | null;
+  /**
+   * Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)
+   * @nullable
+   */
+  keyExchange: string | null;
+  /**
+   * Full cipher suite name (e.g. TLS_AES_256_GCM_SHA384)
+   * @nullable
+   */
+  cipherSuite: string | null;
+  /**
+   * Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)
+   * @nullable
+   */
+  certSignatureAlgorithm: string | null;
+  /** List of individual findings with severity and explanation */
+  findings: QuantumFinding[];
+  /** ISO 8601 timestamp of when the scan was performed */
+  scannedAt: string;
+  /**
+   * Error message if the scan failed (e.g. timeout, unreachable host)
+   * @nullable
+   */
+  error: string | null;
+}
+
 export interface SimulationRun {
   id: number;
   simulationId: number;
@@ -240,6 +297,8 @@ export interface SimulationRun {
   startedAt: string;
   /** @nullable */
   completedAt: string | null;
+  /** Post-quantum TLS security scan result, or null for older runs */
+  quantumScanResult?: QuantumScanResult | null;
 }
 
 export interface SimulationRunDetail {
@@ -263,6 +322,8 @@ export interface SimulationRunDetail {
   /** @nullable */
   completedAt: string | null;
   stepResults: StepResult[];
+  /** Post-quantum TLS security scan result, or null for older runs */
+  quantumScanResult?: QuantumScanResult | null;
 }
 
 export interface SimulationStats {
