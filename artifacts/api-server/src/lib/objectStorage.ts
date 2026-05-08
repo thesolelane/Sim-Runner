@@ -1,7 +1,7 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Readable } from "stream";
 import { randomUUID } from "crypto";
-import { readFile, unlink } from "fs/promises";
+import { readFile, unlink, access } from "fs/promises";
 import {
   ObjectAclPolicy,
   getObjectAclPolicy,
@@ -180,6 +180,35 @@ export class ObjectStorageService {
       throw new ObjectNotFoundError();
     }
     return objectFile;
+  }
+
+  /**
+   * Delete a stored video by its videoPath value.
+   * Handles both GCS paths (/objects/...) and local filesystem paths.
+   * Resolves silently if the object is already gone.
+   */
+  async deleteObject(videoPath: string): Promise<void> {
+    if (videoPath.startsWith("/objects/")) {
+      // GCS path — resolve using the same logic as getObjectEntityFile
+      const entityId = videoPath.slice("/objects/".length);
+      let entityDir = this.getPrivateObjectDir();
+      if (!entityDir.endsWith("/")) entityDir = `${entityDir}/`;
+      const fullPath = `${entityDir}${entityId}`;
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+      const file = objectStorageClient.bucket(bucketName).file(objectName);
+      const [exists] = await file.exists();
+      if (exists) {
+        await file.delete();
+      }
+    } else {
+      // Local filesystem path — best-effort unlink
+      try {
+        await access(videoPath);
+        await unlink(videoPath);
+      } catch {
+        // Already gone or inaccessible — ignore
+      }
+    }
   }
 
   normalizeObjectEntityPath(rawPath: string): string {

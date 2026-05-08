@@ -1,9 +1,13 @@
 import cron, { type ScheduledTask } from "node-cron";
 import { db, simulationsTable, simulationRunsTable } from "@workspace/db";
-import { eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, lt, sql } from "drizzle-orm";
 import { runSimulation } from "./engine";
 import { checkAndSendAlert } from "./alerting";
+import { ObjectStorageService } from "./objectStorage";
 import { logger } from "./logger";
+
+const VIDEO_RETENTION_DAYS = parseInt(process.env.VIDEO_RETENTION_DAYS ?? "30", 10);
+const objectStorage = new ObjectStorageService();
 
 const scheduledTasks = new Map<number, ScheduledTask>();
 
@@ -102,6 +106,44 @@ async function executeScheduledRun(simulationId: number): Promise<void> {
   logger.info({ simulationId, overallStatus, passedSteps, failedSteps }, "Scheduled run complete");
 }
 
+async function purgeOldVideoRecordings(): Promise<void> {
+  const cutoff = new Date(Date.now() - VIDEO_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+
+  const oldRuns = await db
+    .select({ id: simulationRunsTable.id, videoPath: simulationRunsTable.videoPath })
+    .from(simulationRunsTable)
+    .where(
+      and(
+        isNotNull(simulationRunsTable.videoPath),
+        lt(simulationRunsTable.startedAt, cutoff)
+      )
+    );
+
+  if (oldRuns.length === 0) {
+    logger.info({ retentionDays: VIDEO_RETENTION_DAYS }, "Video purge: nothing to delete");
+    return;
+  }
+
+  let deleted = 0;
+  let failed = 0;
+
+  for (const run of oldRuns) {
+    try {
+      await objectStorage.deleteObject(run.videoPath!);
+      await db
+        .update(simulationRunsTable)
+        .set({ videoPath: null })
+        .where(eq(simulationRunsTable.id, run.id));
+      deleted++;
+    } catch (err) {
+      logger.warn({ err, runId: run.id, videoPath: run.videoPath }, "Video purge: failed to delete object");
+      failed++;
+    }
+  }
+
+  logger.info({ deleted, failed, retentionDays: VIDEO_RETENTION_DAYS }, "Video purge complete");
+}
+
 export function registerSchedule(simulationId: number, cronExpr: string): void {
   unregisterSchedule(simulationId);
 
@@ -142,4 +184,13 @@ export async function initializeSchedules(): Promise<void> {
   }
 
   logger.info({ count: simulations.length }, "Schedules initialized");
+
+  // Daily video retention cleanup at 03:00 UTC
+  cron.schedule("0 3 * * *", () => {
+    purgeOldVideoRecordings().catch((err) => {
+      logger.error({ err }, "Unhandled error in video purge job");
+    });
+  });
+
+  logger.info({ retentionDays: VIDEO_RETENTION_DAYS }, "Video retention cleanup scheduled (daily 03:00 UTC)");
 }
