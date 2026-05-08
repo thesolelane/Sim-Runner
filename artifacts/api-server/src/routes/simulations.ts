@@ -1292,6 +1292,9 @@ router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void>
     return;
   }
 
+  const isDownload = req.query.download === "1";
+  const dispositionFilename = `run-${runId}-recording.webm`;
+
   // GCS-backed path: serve from object storage
   if (run.videoPath.startsWith("/objects/")) {
     try {
@@ -1302,6 +1305,9 @@ router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void>
       if (cl) res.setHeader("Content-Length", cl);
       res.setHeader("Accept-Ranges", "bytes");
       res.setHeader("Cache-Control", "private, max-age=3600");
+      if (isDownload) {
+        res.setHeader("Content-Disposition", `attachment; filename="${dispositionFilename}"`);
+      }
       Readable.fromWeb(response.body as unknown as NodeWebStream<Uint8Array>).pipe(res);
     } catch {
       res.status(410).json({ error: "Video no longer available in storage" });
@@ -1323,6 +1329,9 @@ router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void>
   res.setHeader("Content-Type", "video/webm");
   res.setHeader("Accept-Ranges", "bytes");
   res.setHeader("Cache-Control", "private, max-age=3600");
+  if (isDownload) {
+    res.setHeader("Content-Disposition", `attachment; filename="${dispositionFilename}"`);
+  }
 
   if (rangeHeader) {
     const parts = rangeHeader.replace(/bytes=/, "").split("-");

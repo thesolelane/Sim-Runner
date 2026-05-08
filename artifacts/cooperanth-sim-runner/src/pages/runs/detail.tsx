@@ -22,6 +22,7 @@ import {
   ChevronUp,
   MousePointer,
   Video,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -128,11 +129,21 @@ export default function RunDetail() {
 
       {run.videoUrl && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <Video className="h-5 w-5 text-purple-600" />
               Session Recording
             </CardTitle>
+            <a
+              href={`${run.videoUrl}?download=1`}
+              download={`run-${rId}-recording.webm`}
+              data-testid="button-download-video"
+            >
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </Button>
+            </a>
           </CardHeader>
           <CardContent>
             <div className="rounded-lg overflow-hidden border bg-black">
