@@ -123,13 +123,17 @@ function inferSigAlgFromCert(cert: tls.PeerCertificate, detailedCert: Record<str
   const exponent = detailedCert.exponent as string | undefined;
 
   if (asn1Curve) {
-    const curveName = asn1Curve === "prime256v1" ? "P-256" : asn1Curve;
-    return `ecdsa-with-SHA256 (${curveName}, inferred)`;
+    const curveName = asn1Curve === "prime256v1" ? "P-256"
+      : asn1Curve === "secp384r1" ? "P-384"
+      : asn1Curve === "secp521r1" ? "P-521"
+      : asn1Curve;
+    return bits
+      ? `ecdsa (${curveName}, ${bits}-bit, inferred)`
+      : `ecdsa (${curveName}, inferred)`;
   }
 
   if (exponent ?? (typeof (cert as unknown as Record<string, unknown>).modulus === "string")) {
-    if (bits) return `RSA-SHA256 (${bits}-bit, inferred)`;
-    return "RSA-SHA256 (inferred)";
+    return bits ? `rsa (${bits}-bit, inferred)` : "rsa (inferred)";
   }
 
   return null;
@@ -219,7 +223,7 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
       timedOut = true;
       socket.destroy();
       resolve(makeErrorResult({ scannedAt, error: "Connection timeout" }));
-    }, 8000);
+    }, 5000);
 
     const socket = tls.connect(
       {
