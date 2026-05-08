@@ -3,8 +3,10 @@ import { useParams, Link } from "wouter";
 import {
   useGetRun,
   useGetSimulation,
+  useListRuns,
   getGetRunQueryKey,
   getGetSimulationQueryKey,
+  getListRunsQueryKey,
   type QuantumScanResult,
   type BlockchainAccountInfo,
 } from "@workspace/api-client-react";
@@ -295,7 +297,41 @@ function QuantumSecurityCard({
   );
 }
 
-function BlockchainInfoCard({ info }: { info: BlockchainAccountInfo }) {
+type BlockchainDiff = Partial<Record<keyof BlockchainAccountInfo, boolean>>;
+
+function computeDiff(current: BlockchainAccountInfo, prev: BlockchainAccountInfo): BlockchainDiff {
+  const diff: BlockchainDiff = {};
+  const fields: (keyof BlockchainAccountInfo)[] = [
+    "accountType", "balance", "isActive", "dataSize", "bytecodeHash",
+    "executable", "owner", "isPda", "isNativeProgram",
+  ];
+  for (const field of fields) {
+    if (current[field] !== prev[field]) {
+      diff[field] = true;
+    }
+  }
+  return diff;
+}
+
+function ChangedBadge() {
+  return (
+    <Badge variant="outline" className="text-[10px] h-4 border-amber-300 bg-amber-50 text-amber-700 ml-1.5">
+      changed
+    </Badge>
+  );
+}
+
+function BlockchainInfoCard({
+  info,
+  prevInfo,
+}: {
+  info: BlockchainAccountInfo;
+  prevInfo?: BlockchainAccountInfo | null;
+}) {
+  const diff: BlockchainDiff = prevInfo ? computeDiff(info, prevInfo) : {};
+  const hasAnyChange = Object.keys(diff).length > 0;
+  const bytecodeChanged = diff.bytecodeHash === true;
+
   const accountTypeLabel =
     info.accountType === "contract"
       ? "Smart Contract"
@@ -312,6 +348,11 @@ function BlockchainInfoCard({ info }: { info: BlockchainAccountInfo }) {
         </CardTitle>
         <CardDescription>
           Live data fetched from {info.chainName} at the time of this run.
+          {prevInfo && (
+            <span className="ml-1 text-muted-foreground">
+              Compared with previous run.
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -322,45 +363,120 @@ function BlockchainInfoCard({ info }: { info: BlockchainAccountInfo }) {
           </div>
         )}
 
+        {bytecodeChanged && (
+          <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2.5">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              <strong>Contract bytecode changed</strong> since the previous run. This may indicate a contract upgrade or redeployment.
+            </span>
+          </div>
+        )}
+
+        {prevInfo && hasAnyChange && !bytecodeChanged && (
+          <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>Some account fields changed since the previous run (highlighted below).</span>
+          </div>
+        )}
+
+        {prevInfo && !hasAnyChange && (
+          <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>No changes detected since the previous run.</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Chain</div>
             <div className="font-semibold">{info.chainName}</div>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Account Type</div>
-            <Badge
-              variant="outline"
-              className={
-                info.accountType === "contract"
-                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                  : info.accountType === "wallet"
-                  ? "border-green-200 bg-green-50 text-green-700"
-                  : "border-muted"
-              }
-            >
-              {accountTypeLabel}
-            </Badge>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+              Account Type
+              {diff.accountType && <ChangedBadge />}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Badge
+                variant="outline"
+                className={
+                  info.accountType === "contract"
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : info.accountType === "wallet"
+                    ? "border-green-200 bg-green-50 text-green-700"
+                    : "border-muted"
+                }
+              >
+                {accountTypeLabel}
+              </Badge>
+              {info.isNativeProgram && (
+                <Badge variant="outline" className="border-purple-200 bg-purple-50 text-purple-700 text-xs">
+                  Native
+                </Badge>
+              )}
+              {info.isPda && (
+                <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 text-xs">
+                  PDA
+                </Badge>
+              )}
+            </div>
           </div>
+
           <div className="col-span-2">
             <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Address</div>
             <div className="font-mono text-xs break-all bg-muted px-3 py-2 rounded">{info.address}</div>
           </div>
+
           {info.balance && (
             <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Balance</div>
-              <div className="font-mono text-sm">{info.balance}</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Balance
+                {diff.balance && <ChangedBadge />}
+              </div>
+              <div className={`font-mono text-sm ${diff.balance ? "text-amber-700" : ""}`}>
+                {info.balance}
+                {diff.balance && prevInfo?.balance && (
+                  <span className="text-xs text-muted-foreground ml-1.5 line-through">{prevInfo.balance}</span>
+                )}
+              </div>
             </div>
           )}
+
           {info.dataSize !== null && (
             <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Bytecode Size</div>
-              <div className="font-mono text-sm">{info.dataSize.toLocaleString()} bytes</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Bytecode Size
+                {diff.dataSize && <ChangedBadge />}
+              </div>
+              <div className={`font-mono text-sm ${diff.dataSize ? "text-amber-700" : ""}`}>
+                {info.dataSize.toLocaleString()} bytes
+              </div>
             </div>
           )}
+
+          {info.bytecodeHash && (
+            <div className="col-span-2">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Bytecode Hash (SHA-256)
+                {diff.bytecodeHash && <ChangedBadge />}
+              </div>
+              <div className={`font-mono text-xs break-all bg-muted px-2 py-1 rounded ${diff.bytecodeHash ? "bg-red-50 border border-red-200 text-red-700" : ""}`}>
+                {info.bytecodeHash}
+              </div>
+              {diff.bytecodeHash && prevInfo?.bytecodeHash && (
+                <div className="font-mono text-xs break-all bg-muted px-2 py-1 rounded mt-1 line-through text-muted-foreground">
+                  {prevInfo.bytecodeHash}
+                </div>
+              )}
+            </div>
+          )}
+
           {info.owner && (
             <div className="col-span-2">
-              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Owner Program</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">
+                Owner Program
+                {diff.owner && <ChangedBadge />}
+              </div>
               <div className="font-mono text-xs break-all bg-muted px-2 py-1 rounded">{info.owner}</div>
             </div>
           )}
@@ -411,6 +527,19 @@ export default function RunDetail() {
   const { data: run, isLoading } = useGetRun(simId, rId, {
     query: { enabled: !!simId && !!rId, queryKey: getGetRunQueryKey(simId, rId) },
   });
+
+  const { data: allRuns } = useListRuns(simId, {
+    query: { enabled: !!simId, queryKey: getListRunsQueryKey(simId) },
+  });
+
+  const previousRun = (() => {
+    if (!allRuns || !rId) return null;
+    const sorted = [...allRuns].sort((a, b) => a.id - b.id);
+    const idx = sorted.findIndex((r) => r.id === rId);
+    return idx > 0 ? sorted[idx - 1] : null;
+  })();
+
+  const prevBlockchainInfo = previousRun?.blockchainScanResult as BlockchainAccountInfo | null | undefined;
 
   if (isLoading) {
     return (
@@ -536,7 +665,10 @@ export default function RunDetail() {
       )}
 
       {run.blockchainScanResult && (
-        <BlockchainInfoCard info={run.blockchainScanResult as BlockchainAccountInfo} />
+        <BlockchainInfoCard
+          info={run.blockchainScanResult as BlockchainAccountInfo}
+          prevInfo={prevBlockchainInfo}
+        />
       )}
 
       {!run.blockchainScanResult && (

@@ -134,6 +134,21 @@ export interface BlockchainAccountInfo {
    * @nullable
    */
   owner: string | null;
+  /**
+   * SHA-256 hash of deployed EVM bytecode. Null for wallets or Solana accounts. Changes here indicate a contract upgrade.
+   * @nullable
+   */
+  bytecodeHash: string | null;
+  /**
+   * True if this is a Solana Program Derived Address (non-executable data account owned by a program). Null for EVM chains.
+   * @nullable
+   */
+  isPda: boolean | null;
+  /**
+   * True if this is a Solana native/built-in system program. Null for EVM chains.
+   * @nullable
+   */
+  isNativeProgram: boolean | null;
   /** Block explorer URL for this address */
   explorerUrl: string;
   quantumRoadmap: BlockchainQuantumRoadmap;

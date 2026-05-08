@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { logger } from "./logger";
 
 export type ChainId = "solana" | "ethereum" | "base" | "arbitrum" | "monad";
@@ -13,6 +14,9 @@ export interface BlockchainAccountInfo {
   dataSize: number | null;
   executable: boolean | null;
   owner: string | null;
+  bytecodeHash: string | null;
+  isPda: boolean | null;
+  isNativeProgram: boolean | null;
   explorerUrl: string;
   quantumRoadmap: {
     status: string;
@@ -133,6 +137,23 @@ function formatWei(weiHex: string, decimals: number, symbol: string): string {
   }
 }
 
+const SOLANA_SYSTEM_PROGRAM = "11111111111111111111111111111111";
+const SOLANA_NATIVE_LOADER = "NativeLoader1111111111111111111111111111111";
+const KNOWN_NATIVE_PROGRAMS = new Set([
+  SOLANA_SYSTEM_PROGRAM,
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  "BPFLoaderUpgradeab1e11111111111111111111111",
+  SOLANA_NATIVE_LOADER,
+  "Sysvar1111111111111111111111111111111111111",
+  "Vote111111111111111111111111111111111111111p",
+  "Stake11111111111111111111111111111111111111",
+  "Config1111111111111111111111111111111111111",
+  "ComputeBudget111111111111111111111111111111",
+  "AddressLookupTab1e1111111111111111111111111",
+  "Ed25519SigVerify111111111111111111111111111",
+  "Secp256k1SigVerify11111111111111111111111111",
+]);
+
 async function scanSolana(address: string, config: typeof CHAIN_CONFIGS.solana): Promise<BlockchainAccountInfo> {
   const result = await jsonRpc(config.rpcUrl, "getAccountInfo", [
     address,
@@ -153,6 +174,9 @@ async function scanSolana(address: string, config: typeof CHAIN_CONFIGS.solana):
       dataSize: null,
       executable: null,
       owner: null,
+      bytecodeHash: null,
+      isPda: null,
+      isNativeProgram: KNOWN_NATIVE_PROGRAMS.has(address),
       explorerUrl: `${config.explorerBase}/${address}`,
       quantumRoadmap: config.quantumRoadmap,
       scannedAt: new Date().toISOString(),
@@ -164,9 +188,12 @@ async function scanSolana(address: string, config: typeof CHAIN_CONFIGS.solana):
     ? Buffer.from(value.data[0] as string, "base64").length
     : 0;
 
+  const isNativeProgram = KNOWN_NATIVE_PROGRAMS.has(address) || value.owner === SOLANA_NATIVE_LOADER;
+  const isPda = !value.executable && value.owner !== SOLANA_SYSTEM_PROGRAM && !isNativeProgram;
+
   const accountType: BlockchainAccountInfo["accountType"] = value.executable
     ? "contract"
-    : value.owner !== "11111111111111111111111111111111"
+    : isPda
     ? "contract"
     : "wallet";
 
@@ -181,6 +208,9 @@ async function scanSolana(address: string, config: typeof CHAIN_CONFIGS.solana):
     dataSize: dataBytes > 0 ? dataBytes : null,
     executable: value.executable,
     owner: value.owner,
+    bytecodeHash: null,
+    isPda,
+    isNativeProgram,
     explorerUrl: `${config.explorerBase}/${address}`,
     quantumRoadmap: config.quantumRoadmap,
     scannedAt: new Date().toISOString(),
@@ -200,6 +230,9 @@ async function scanEvm(
 
   const hasCode = typeof codeHex === "string" && codeHex !== "0x" && codeHex.length > 2;
   const codeSize = hasCode ? Math.floor((codeHex.length - 2) / 2) : 0;
+  const bytecodeHash = hasCode
+    ? createHash("sha256").update(Buffer.from((codeHex as string).slice(2), "hex")).digest("hex")
+    : null;
   const accountType: BlockchainAccountInfo["accountType"] = hasCode ? "contract" : "wallet";
   const isActive = hasCode || (typeof balanceHex === "string" && balanceHex !== "0x0" && balanceHex !== "0x");
 
@@ -216,6 +249,9 @@ async function scanEvm(
     dataSize: hasCode ? codeSize : null,
     executable: hasCode ? true : null,
     owner: null,
+    bytecodeHash,
+    isPda: null,
+    isNativeProgram: null,
     explorerUrl: `${config.explorerBase}/${address}`,
     quantumRoadmap: config.quantumRoadmap,
     scannedAt: new Date().toISOString(),
@@ -250,6 +286,9 @@ export async function scanBlockchainAddress(
       dataSize: null,
       executable: null,
       owner: null,
+      bytecodeHash: null,
+      isPda: null,
+      isNativeProgram: null,
       explorerUrl: `${config.explorerBase}/${address}`,
       quantumRoadmap: config.quantumRoadmap,
       scannedAt: new Date().toISOString(),

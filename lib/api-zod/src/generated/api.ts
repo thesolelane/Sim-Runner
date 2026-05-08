@@ -89,6 +89,24 @@ export const ScanUrlResponse = zod.object({
         .nullable()
         .describe("Whether the account is executable (Solana)"),
       owner: zod.string().nullable().describe("Program owner (Solana)"),
+      bytecodeHash: zod
+        .string()
+        .nullable()
+        .describe(
+          "SHA-256 hash of deployed EVM bytecode. Null for wallets or Solana accounts. Changes here indicate a contract upgrade.",
+        ),
+      isPda: zod
+        .boolean()
+        .nullable()
+        .describe(
+          "True if this is a Solana Program Derived Address (non-executable data account owned by a program). Null for EVM chains.",
+        ),
+      isNativeProgram: zod
+        .boolean()
+        .nullable()
+        .describe(
+          "True if this is a Solana native\/built-in system program. Null for EVM chains.",
+        ),
       explorerUrl: zod.string().describe("Block explorer URL for this address"),
       quantumRoadmap: zod.object({
         status: zod.string(),
@@ -211,6 +229,24 @@ export const GetSimulationStatsResponse = zod.object({
             .nullable()
             .describe("Whether the account is executable (Solana)"),
           owner: zod.string().nullable().describe("Program owner (Solana)"),
+          bytecodeHash: zod
+            .string()
+            .nullable()
+            .describe(
+              "SHA-256 hash of deployed EVM bytecode. Null for wallets or Solana accounts. Changes here indicate a contract upgrade.",
+            ),
+          isPda: zod
+            .boolean()
+            .nullable()
+            .describe(
+              "True if this is a Solana Program Derived Address (non-executable data account owned by a program). Null for EVM chains.",
+            ),
+          isNativeProgram: zod
+            .boolean()
+            .nullable()
+            .describe(
+              "True if this is a Solana native\/built-in system program. Null for EVM chains.",
+            ),
           explorerUrl: zod
             .string()
             .describe("Block explorer URL for this address"),
@@ -721,6 +757,24 @@ export const ListRunsResponseItem = zod.object({
         .nullable()
         .describe("Whether the account is executable (Solana)"),
       owner: zod.string().nullable().describe("Program owner (Solana)"),
+      bytecodeHash: zod
+        .string()
+        .nullable()
+        .describe(
+          "SHA-256 hash of deployed EVM bytecode. Null for wallets or Solana accounts. Changes here indicate a contract upgrade.",
+        ),
+      isPda: zod
+        .boolean()
+        .nullable()
+        .describe(
+          "True if this is a Solana Program Derived Address (non-executable data account owned by a program). Null for EVM chains.",
+        ),
+      isNativeProgram: zod
+        .boolean()
+        .nullable()
+        .describe(
+          "True if this is a Solana native\/built-in system program. Null for EVM chains.",
+        ),
       explorerUrl: zod.string().describe("Block explorer URL for this address"),
       quantumRoadmap: zod.object({
         status: zod.string(),
@@ -889,6 +943,24 @@ export const GetRunResponse = zod.object({
           .nullable()
           .describe("Whether the account is executable (Solana)"),
         owner: zod.string().nullable().describe("Program owner (Solana)"),
+        bytecodeHash: zod
+          .string()
+          .nullable()
+          .describe(
+            "SHA-256 hash of deployed EVM bytecode. Null for wallets or Solana accounts. Changes here indicate a contract upgrade.",
+          ),
+        isPda: zod
+          .boolean()
+          .nullable()
+          .describe(
+            "True if this is a Solana Program Derived Address (non-executable data account owned by a program). Null for EVM chains.",
+          ),
+        isNativeProgram: zod
+          .boolean()
+          .nullable()
+          .describe(
+            "True if this is a Solana native\/built-in system program. Null for EVM chains.",
+          ),
         explorerUrl: zod
           .string()
           .describe("Block explorer URL for this address"),

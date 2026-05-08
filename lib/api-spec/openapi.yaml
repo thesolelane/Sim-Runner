@@ -580,6 +580,15 @@ components:
         owner:
           type: ["string", "null"]
           description: "Program owner (Solana)"
+        bytecodeHash:
+          type: ["string", "null"]
+          description: "SHA-256 hash of deployed EVM bytecode. Null for wallets or Solana accounts. Changes here indicate a contract upgrade."
+        isPda:
+          type: ["boolean", "null"]
+          description: "True if this is a Solana Program Derived Address (non-executable data account owned by a program). Null for EVM chains."
+        isNativeProgram:
+          type: ["boolean", "null"]
+          description: "True if this is a Solana native/built-in system program. Null for EVM chains."
         explorerUrl:
           type: string
           description: "Block explorer URL for this address"
@@ -600,6 +609,9 @@ components:
         - dataSize
         - executable
         - owner
+        - bytecodeHash
+        - isPda
+        - isNativeProgram
         - explorerUrl
         - quantumRoadmap
         - scannedAt
