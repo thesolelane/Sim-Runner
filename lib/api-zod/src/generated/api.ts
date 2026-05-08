@@ -152,11 +152,17 @@ export const GetSimulationStatsResponse = zod.object({
             .string()
             .nullable()
             .describe("Negotiated TLS protocol version (e.g. TLSv1.3)"),
+          httpVersion: zod
+            .string()
+            .nullable()
+            .describe(
+              "Application-layer protocol detected via ALPN (e.g. HTTP\/2, HTTP\/1.1)",
+            ),
           keyExchange: zod
             .string()
             .nullable()
             .describe(
-              "Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)",
+              "Key exchange algorithm detected, including named group for TLS 1.3 (e.g. ECDHE-x25519, X25519Kyber768)",
             ),
           cipherSuite: zod
             .string()
@@ -167,6 +173,12 @@ export const GetSimulationStatsResponse = zod.object({
             .nullable()
             .describe(
               "Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)",
+            ),
+          serverSigAlgs: zod
+            .string()
+            .nullable()
+            .describe(
+              "Comma-separated list of signature algorithms the server advertised support for during the TLS handshake",
             ),
           findings: zod
             .array(
@@ -686,11 +698,17 @@ export const ListRunsResponseItem = zod.object({
         .string()
         .nullable()
         .describe("Negotiated TLS protocol version (e.g. TLSv1.3)"),
+      httpVersion: zod
+        .string()
+        .nullable()
+        .describe(
+          "Application-layer protocol detected via ALPN (e.g. HTTP\/2, HTTP\/1.1)",
+        ),
       keyExchange: zod
         .string()
         .nullable()
         .describe(
-          "Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)",
+          "Key exchange algorithm detected, including named group for TLS 1.3 (e.g. ECDHE-x25519, X25519Kyber768)",
         ),
       cipherSuite: zod
         .string()
@@ -700,6 +718,12 @@ export const ListRunsResponseItem = zod.object({
         .string()
         .nullable()
         .describe("Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)"),
+      serverSigAlgs: zod
+        .string()
+        .nullable()
+        .describe(
+          "Comma-separated list of signature algorithms the server advertised support for during the TLS handshake",
+        ),
       findings: zod
         .array(
           zod.object({
@@ -865,11 +889,17 @@ export const GetRunResponse = zod.object({
           .string()
           .nullable()
           .describe("Negotiated TLS protocol version (e.g. TLSv1.3)"),
+        httpVersion: zod
+          .string()
+          .nullable()
+          .describe(
+            "Application-layer protocol detected via ALPN (e.g. HTTP\/2, HTTP\/1.1)",
+          ),
         keyExchange: zod
           .string()
           .nullable()
           .describe(
-            "Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)",
+            "Key exchange algorithm detected, including named group for TLS 1.3 (e.g. ECDHE-x25519, X25519Kyber768)",
           ),
         cipherSuite: zod
           .string()
@@ -880,6 +910,12 @@ export const GetRunResponse = zod.object({
           .nullable()
           .describe(
             "Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)",
+          ),
+        serverSigAlgs: zod
+          .string()
+          .nullable()
+          .describe(
+            "Comma-separated list of signature algorithms the server advertised support for during the TLS handshake",
           ),
         findings: zod
           .array(

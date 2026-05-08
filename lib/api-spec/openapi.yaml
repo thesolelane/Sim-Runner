@@ -960,15 +960,21 @@ components:
         tlsVersion:
           type: ["string", "null"]
           description: "Negotiated TLS protocol version (e.g. TLSv1.3)"
+        httpVersion:
+          type: ["string", "null"]
+          description: "Application-layer protocol detected via ALPN (e.g. HTTP/2, HTTP/1.1)"
         keyExchange:
           type: ["string", "null"]
-          description: "Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)"
+          description: "Key exchange algorithm detected, including named group for TLS 1.3 (e.g. ECDHE-x25519, X25519Kyber768)"
         cipherSuite:
           type: ["string", "null"]
           description: "Full cipher suite name (e.g. TLS_AES_256_GCM_SHA384)"
         certSignatureAlgorithm:
           type: ["string", "null"]
           description: "Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)"
+        serverSigAlgs:
+          type: ["string", "null"]
+          description: "Comma-separated list of signature algorithms the server advertised support for during the TLS handshake"
         findings:
           type: array
           items:
@@ -983,9 +989,11 @@ components:
       required:
         - quantumSafe
         - tlsVersion
+        - httpVersion
         - keyExchange
         - cipherSuite
         - certSignatureAlgorithm
+        - serverSigAlgs
         - findings
         - scannedAt
         - error

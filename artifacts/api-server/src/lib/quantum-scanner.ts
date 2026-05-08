@@ -13,9 +13,11 @@ export interface QuantumFinding {
 export interface QuantumScanResult {
   quantumSafe: boolean;
   tlsVersion: string | null;
+  httpVersion: string | null;
   keyExchange: string | null;
   cipherSuite: string | null;
   certSignatureAlgorithm: string | null;
+  serverSigAlgs: string | null;
   findings: QuantumFinding[];
   scannedAt: string;
   error: string | null;
@@ -58,6 +60,26 @@ function isTls13CipherSuite(name: string): boolean {
   return name.startsWith("TLS_AES_") || name.startsWith("TLS_CHACHA20_") || name.startsWith("TLS_AES128_");
 }
 
+function keyExchangeFromEphemeralKey(
+  ephemeralKey: { type: string; name?: string; size?: number } | null,
+  tlsVersion: string | null,
+): string | null {
+  if (!ephemeralKey) return null;
+  const { type, name } = ephemeralKey;
+
+  if (type === "ECDH" && name) {
+    const lower = name.toLowerCase().replace(/[-_]/g, "");
+    if (lower.includes("x25519kyber") || lower.includes("kyber") || lower.includes("mlkem")) {
+      return name;
+    }
+    const versionSuffix = tlsVersion === "TLSv1.3" ? " (TLS 1.3)" : "";
+    return `ECDHE-${name}${versionSuffix}`;
+  }
+  if (type === "DH") return "DHE";
+  if (type === "RSA") return "RSA";
+  return name ?? type ?? null;
+}
+
 function extractKeyExchangeFromCipher(cipher: tls.CipherNameAndProtocol, tlsVersion: string | null): string {
   const name = cipher.name ?? "";
   if (isTls13CipherSuite(name) || tlsVersion === "TLSv1.3") {
@@ -69,23 +91,6 @@ function extractKeyExchangeFromCipher(cipher: tls.CipherNameAndProtocol, tlsVers
   if (name.includes("ECDH")) return "ECDH";
   if (name.includes("DH")) return "DH";
   return "Unknown";
-}
-
-function keyExchangeFromEphemeralKey(
-  ephemeralKey: { type: string; name?: string; size?: number } | null,
-): string | null {
-  if (!ephemeralKey) return null;
-  const { type, name } = ephemeralKey;
-  if (type === "ECDH" && name) {
-    const lower = name.toLowerCase().replace(/[-_]/g, "");
-    if (lower.includes("x25519kyber") || lower.includes("kyber") || lower.includes("mlkem")) {
-      return name;
-    }
-    return `ECDHE-${name}`;
-  }
-  if (type === "DH") return "DHE";
-  if (type === "RSA") return "RSA";
-  return name ?? type ?? null;
 }
 
 function getRsaKeyBits(sigAlg: string): number | null {
@@ -112,6 +117,47 @@ function classifySigAlg(sigAlg: string): { label: string; quantum: boolean; shor
   return { label: sigAlg, quantum: false, shortKey: false };
 }
 
+function inferSigAlgFromCert(cert: tls.PeerCertificate, detailedCert: Record<string, unknown>): string | null {
+  const asn1Curve = detailedCert.asn1Curve as string | undefined;
+  const bits = typeof detailedCert.bits === "number" ? detailedCert.bits as number : null;
+  const exponent = detailedCert.exponent as string | undefined;
+
+  if (asn1Curve) {
+    const curveName = asn1Curve === "prime256v1" ? "P-256" : asn1Curve;
+    return `ecdsa-with-SHA256 (${curveName}, inferred)`;
+  }
+
+  if (exponent ?? (typeof (cert as unknown as Record<string, unknown>).modulus === "string")) {
+    if (bits) return `RSA-SHA256 (${bits}-bit, inferred)`;
+    return "RSA-SHA256 (inferred)";
+  }
+
+  return null;
+}
+
+function alpnToHttpVersion(alpnProtocol: string | boolean | null | undefined): string | null {
+  if (alpnProtocol === "h2") return "HTTP/2";
+  if (alpnProtocol === "http/1.1") return "HTTP/1.1";
+  if (typeof alpnProtocol === "string" && alpnProtocol.length > 0) return alpnProtocol;
+  return null;
+}
+
+function makeErrorResult(
+  overrides: Partial<Pick<QuantumScanResult, "tlsVersion" | "keyExchange" | "cipherSuite" | "certSignatureAlgorithm">> & { scannedAt: string; error: string | null; findings?: QuantumFinding[] },
+): QuantumScanResult {
+  return {
+    quantumSafe: false,
+    tlsVersion: null,
+    httpVersion: null,
+    keyExchange: null,
+    cipherSuite: null,
+    certSignatureAlgorithm: null,
+    serverSigAlgs: null,
+    findings: [],
+    ...overrides,
+  };
+}
+
 export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumScanResult> {
   const scannedAt = new Date().toISOString();
 
@@ -119,12 +165,9 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
   try {
     parsed = new URL(targetUrl);
   } catch {
-    return {
-      quantumSafe: false,
-      tlsVersion: null,
-      keyExchange: null,
-      cipherSuite: null,
-      certSignatureAlgorithm: null,
+    return makeErrorResult({
+      scannedAt,
+      error: "Invalid URL",
       findings: [
         {
           field: "URL",
@@ -133,18 +176,13 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
           explanation: "Could not parse the target URL.",
         },
       ],
-      scannedAt,
-      error: "Invalid URL",
-    };
+    });
   }
 
   if (parsed.protocol === "http:") {
-    return {
-      quantumSafe: false,
-      tlsVersion: null,
-      keyExchange: null,
-      cipherSuite: null,
-      certSignatureAlgorithm: null,
+    return makeErrorResult({
+      scannedAt,
+      error: null,
       findings: [
         {
           field: "TLS",
@@ -154,18 +192,13 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
             "No TLS — all traffic is unencrypted. A quantum computer (or any attacker) can read all data in transit. Migrate to HTTPS immediately.",
         },
       ],
-      scannedAt,
-      error: null,
-    };
+    });
   }
 
   if (parsed.protocol !== "https:") {
-    return {
-      quantumSafe: false,
-      tlsVersion: null,
-      keyExchange: null,
-      cipherSuite: null,
-      certSignatureAlgorithm: null,
+    return makeErrorResult({
+      scannedAt,
+      error: "Non-HTTPS URL",
       findings: [
         {
           field: "Protocol",
@@ -174,9 +207,7 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
           explanation: "Non-HTTP(S) URL — quantum scan only applies to HTTPS targets.",
         },
       ],
-      scannedAt,
-      error: "Non-HTTPS URL",
-    };
+    });
   }
 
   const hostname = parsed.hostname;
@@ -187,17 +218,8 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
     const timeout = setTimeout(() => {
       timedOut = true;
       socket.destroy();
-      resolve({
-        quantumSafe: false,
-        tlsVersion: null,
-        keyExchange: null,
-        cipherSuite: null,
-        certSignatureAlgorithm: null,
-        findings: [],
-        scannedAt,
-        error: "Connection timeout",
-      });
-    }, 5000);
+      resolve(makeErrorResult({ scannedAt, error: "Connection timeout" }));
+    }, 8000);
 
     const socket = tls.connect(
       {
@@ -205,6 +227,7 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
         port,
         servername: hostname,
         rejectUnauthorized: false,
+        ALPNProtocols: ["h2", "http/1.1"],
       },
       () => {
         clearTimeout(timeout);
@@ -213,15 +236,20 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
           const tlsVersion = socket.getProtocol() ?? null;
           const cipher = socket.getCipher();
           const cipherSuite = cipher?.name ?? null;
-          const cert = socket.getPeerCertificate();
 
+          const alpnRaw = (socket as unknown as { alpnProtocol?: string | boolean }).alpnProtocol;
+          const httpVersion = alpnToHttpVersion(alpnRaw as string | null | undefined);
+
+          const cert = socket.getPeerCertificate();
           const detailedCert = socket.getPeerCertificate(true) as unknown as Record<string, unknown>;
-          const certSigAlgRaw = detailedCert?.sigalg as string | undefined ?? null;
-          const certSigAlg = typeof certSigAlgRaw === "string" ? certSigAlgRaw : null;
+
+          const certSigAlgRaw = (detailedCert?.sigalg as string | undefined) ?? null;
+          const certSigAlg = typeof certSigAlgRaw === "string" && certSigAlgRaw.length > 0
+            ? certSigAlgRaw
+            : inferSigAlgFromCert(cert, detailedCert);
+
           const certBits = typeof detailedCert?.bits === "number" ? detailedCert.bits as number : null;
-          const certPubkeyAlgo = typeof (detailedCert?.asn1Curve ?? detailedCert?.nid) === "string"
-            ? "EC"
-            : null;
+          const certPubkeyAlgo = typeof detailedCert?.asn1Curve === "string" ? "EC" : null;
 
           const ephemeralKeyRaw = socket.getEphemeralKeyInfo() as
             | { type: string; name?: string; size?: number }
@@ -233,7 +261,15 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
               : null;
 
           const keyExchange =
-            keyExchangeFromEphemeralKey(ephemeralKey) ?? extractKeyExchangeFromCipher(cipher, tlsVersion);
+            keyExchangeFromEphemeralKey(ephemeralKey, tlsVersion) ??
+            extractKeyExchangeFromCipher(cipher, tlsVersion);
+
+          const sharedSigalgs: string[] = typeof (socket as unknown as Record<string, unknown>).getSharedSigalgs === "function"
+            ? ((socket as unknown as { getSharedSigalgs: () => string[] }).getSharedSigalgs() ?? [])
+            : [];
+
+          const pqSharedSigalgs = sharedSigalgs.filter((s) => isPostQuantumSigAlg(s));
+          const serverSigAlgs = sharedSigalgs.length > 0 ? sharedSigalgs.join(", ") : null;
 
           socket.destroy();
 
@@ -246,6 +282,18 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
               severity: "info",
               explanation:
                 "TLS 1.2 is still secure today but TLS 1.3 is preferred — it has a shorter handshake, forward secrecy by default, and better support for post-quantum hybrid extensions.",
+            });
+          }
+
+          if (httpVersion) {
+            findings.push({
+              field: "HTTP Version",
+              detectedValue: httpVersion,
+              severity: "info",
+              explanation:
+                httpVersion === "HTTP/2"
+                  ? "HTTP/2 is in use (detected via ALPN). HTTP/2 enables multiplexing and header compression, and is a prerequisite for HTTP/3 (QUIC) which has native post-quantum protections in modern deployments."
+                  : "HTTP/1.1 is in use. Consider enabling HTTP/2 — it is more efficient and is a prerequisite for future HTTP/3 (QUIC) deployments.",
             });
           }
 
@@ -268,6 +316,16 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
                   "Classical ECDHE is not broken by today's quantum computers but provides no post-quantum protection. Consider a PQC hybrid like X25519Kyber768 (Chrome/Edge already negotiate it if the server supports it).",
               });
             }
+          }
+
+          if (pqSharedSigalgs.length > 0) {
+            findings.push({
+              field: "Server Signature Algorithms",
+              detectedValue: pqSharedSigalgs.join(", "),
+              severity: "info",
+              explanation:
+                `The server advertises support for post-quantum signature algorithm(s): ${pqSharedSigalgs.join(", ")}. This is a strong signal of active PQC migration on the server side.`,
+            });
           }
 
           if (certSigAlg) {
@@ -305,9 +363,11 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
           resolve({
             quantumSafe,
             tlsVersion,
+            httpVersion,
             keyExchange,
             cipherSuite,
             certSignatureAlgorithm: certSigAlg,
+            serverSigAlgs,
             findings,
             scannedAt,
             error: null,
@@ -316,16 +376,10 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
           socket.destroy();
           const msg = err instanceof Error ? err.message : String(err);
           logger.warn({ err, hostname }, "Quantum scanner: error reading TLS session data");
-          resolve({
-            quantumSafe: false,
-            tlsVersion: null,
-            keyExchange: null,
-            cipherSuite: null,
-            certSignatureAlgorithm: null,
-            findings: [],
+          resolve(makeErrorResult({
             scannedAt,
             error: `TLS session read error: ${msg}`,
-          });
+          }));
         }
       },
     );
@@ -335,16 +389,7 @@ export async function scanQuantumSecurity(targetUrl: string): Promise<QuantumSca
       clearTimeout(timeout);
       socket.destroy();
       logger.warn({ err, hostname }, "Quantum scanner: TLS connection error");
-      resolve({
-        quantumSafe: false,
-        tlsVersion: null,
-        keyExchange: null,
-        cipherSuite: null,
-        certSignatureAlgorithm: null,
-        findings: [],
-        scannedAt,
-        error: err.message,
-      });
+      resolve(makeErrorResult({ scannedAt, error: err.message }));
     });
   });
 }

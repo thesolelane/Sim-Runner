@@ -53,9 +53,11 @@ export const simulationRunsTable = pgTable("simulation_runs", {
   quantumScanResult: jsonb("quantum_scan_result").$type<{
     quantumSafe: boolean;
     tlsVersion: string | null;
+    httpVersion: string | null;
     keyExchange: string | null;
     cipherSuite: string | null;
     certSignatureAlgorithm: string | null;
+    serverSigAlgs: string | null;
     findings: Array<{
       field: string;
       detectedValue: string;

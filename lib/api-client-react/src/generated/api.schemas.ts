@@ -361,7 +361,12 @@ export interface QuantumScanResult {
    */
   tlsVersion: string | null;
   /**
-   * Key exchange algorithm detected (e.g. ECDHE, X25519Kyber768)
+   * Application-layer protocol detected via ALPN (e.g. HTTP/2, HTTP/1.1)
+   * @nullable
+   */
+  httpVersion: string | null;
+  /**
+   * Key exchange algorithm detected, including named group for TLS 1.3 (e.g. ECDHE-x25519, X25519Kyber768)
    * @nullable
    */
   keyExchange: string | null;
@@ -375,6 +380,11 @@ export interface QuantumScanResult {
    * @nullable
    */
   certSignatureAlgorithm: string | null;
+  /**
+   * Comma-separated list of signature algorithms the server advertised support for during the TLS handshake
+   * @nullable
+   */
+  serverSigAlgs: string | null;
   /** List of individual findings with severity and explanation */
   findings: QuantumFinding[];
   /** ISO 8601 timestamp of when the scan was performed */

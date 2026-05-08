@@ -158,12 +158,18 @@ function QuantumSecurityCard({
           </div>
         )}
 
-        {(result.tlsVersion || result.keyExchange || result.cipherSuite || result.certSignatureAlgorithm) && (
+        {(result.tlsVersion || result.httpVersion || result.keyExchange || result.cipherSuite || result.certSignatureAlgorithm || result.serverSigAlgs) && (
           <div className="grid grid-cols-2 gap-3 text-xs">
             {result.tlsVersion && (
               <div className="space-y-0.5">
                 <div className="text-muted-foreground uppercase tracking-wider font-medium">TLS Version</div>
                 <div className="font-mono font-medium">{result.tlsVersion}</div>
+              </div>
+            )}
+            {result.httpVersion && (
+              <div className="space-y-0.5">
+                <div className="text-muted-foreground uppercase tracking-wider font-medium">HTTP Version</div>
+                <div className="font-mono font-medium">{result.httpVersion}</div>
               </div>
             )}
             {result.keyExchange && (
@@ -182,6 +188,12 @@ function QuantumSecurityCard({
               <div className="space-y-0.5 col-span-2">
                 <div className="text-muted-foreground uppercase tracking-wider font-medium">Certificate Signature</div>
                 <div className="font-mono font-medium">{result.certSignatureAlgorithm}</div>
+              </div>
+            )}
+            {result.serverSigAlgs && (
+              <div className="space-y-0.5 col-span-2">
+                <div className="text-muted-foreground uppercase tracking-wider font-medium">Server Signature Algorithms</div>
+                <div className="font-mono text-[10px] leading-relaxed text-muted-foreground break-all">{result.serverSigAlgs}</div>
               </div>
             )}
           </div>
