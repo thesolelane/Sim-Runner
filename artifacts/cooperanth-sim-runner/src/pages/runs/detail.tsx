@@ -135,7 +135,7 @@ export default function RunDetail() {
               Session Recording
             </CardTitle>
             <a
-              href={`${run.videoUrl}?download=1`}
+              href={(() => { const u = new URL(run.videoUrl, window.location.origin); u.searchParams.set("download", "1"); return u.toString(); })()}
               download={`run-${rId}-recording.webm`}
               data-testid="button-download-video"
             >
