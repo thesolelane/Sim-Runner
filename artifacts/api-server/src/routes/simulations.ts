@@ -135,6 +135,11 @@ function serializeSimulation(s: typeof simulationsTable.$inferSelect, recentPass
   };
 }
 
+function serializeSimulationSummary(s: typeof simulationsTable.$inferSelect, recentPassRate: number | null = null) {
+  const { webhookToken: _omit, ...rest } = serializeSimulation(s, recentPassRate);
+  return rest;
+}
+
 async function computeRecentPassRates(simIds: number[]): Promise<Map<number, number | null>> {
   if (simIds.length === 0) return new Map();
   const rows = await db.execute(sql<{ simulation_id: number; pass_rate: number | null }>`
@@ -867,7 +872,7 @@ router.get("/simulations", async (req, res): Promise<void> => {
     .orderBy(desc(simulationsTable.createdAt));
 
   const passRates = await computeRecentPassRates(simulations.map((s) => s.id));
-  res.json(simulations.map((s) => serializeSimulation(s, passRates.get(s.id) ?? null)));
+  res.json(simulations.map((s) => serializeSimulationSummary(s, passRates.get(s.id) ?? null)));
 });
 
 router.post("/simulations", async (req, res): Promise<void> => {
@@ -895,7 +900,7 @@ router.post("/simulations", async (req, res): Promise<void> => {
     })
     .returning();
 
-  res.status(201).json(serializeSimulation(simulation));
+  res.status(201).json(serializeSimulationSummary(simulation));
 });
 
 router.get("/simulations/:id", async (req, res): Promise<void> => {
@@ -905,7 +910,7 @@ router.get("/simulations/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [simulation] = await db
+  let [simulation] = await db
     .select()
     .from(simulationsTable)
     .where(eq(simulationsTable.id, params.data.id));
@@ -913,6 +918,15 @@ router.get("/simulations/:id", async (req, res): Promise<void> => {
   if (!simulation) {
     res.status(404).json({ error: "Simulation not found" });
     return;
+  }
+
+  if (!simulation.webhookToken) {
+    const [updated] = await db
+      .update(simulationsTable)
+      .set({ webhookToken: randomUUID() })
+      .where(eq(simulationsTable.id, params.data.id))
+      .returning();
+    simulation = updated;
   }
 
   const passRates = await computeRecentPassRates([simulation.id]);
@@ -996,7 +1010,7 @@ router.patch("/simulations/:id", async (req, res): Promise<void> => {
   }
 
   const patchPassRates = await computeRecentPassRates([simulation.id]);
-  res.json(serializeSimulation(simulation, patchPassRates.get(simulation.id) ?? null));
+  res.json(serializeSimulationSummary(simulation, patchPassRates.get(simulation.id) ?? null));
 });
 
 router.delete("/simulations/:id", async (req, res): Promise<void> => {

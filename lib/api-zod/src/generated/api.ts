@@ -89,51 +89,54 @@ export const TriggerWebhookParams = zod.object({
 /**
  * @summary List all simulations
  */
-export const ListSimulationsResponseItem = zod.object({
-  id: zod.number(),
-  name: zod.string(),
-  appName: zod.string(),
-  appUrl: zod.string(),
-  appType: zod.string(),
-  steps: zod.array(
-    zod.object({
-      order: zod.number(),
-      name: zod.string(),
-      description: zod.string(),
-      fields: zod.array(zod.string()),
-      stepType: zod.string(),
-      selector: zod.string().optional(),
-      actionType: zod.string().optional(),
-      confidence: zod.string().optional(),
-      candidateSelectors: zod.array(zod.string()).optional(),
-    }),
-  ),
-  totalRuns: zod.number(),
-  lastRunStatus: zod.string().nullable(),
-  lastRunAt: zod.string().nullable(),
-  schedule: zod.string().nullable(),
-  alertThreshold: zod.number().nullable(),
-  alertDestination: zod.string().nullable(),
-  webhookToken: zod.string().nullable(),
-  webhookEnabled: zod
-    .boolean()
-    .describe("Whether the webhook trigger endpoint is active"),
-  lastAlertedAt: zod.string().nullable(),
-  nextRunAt: zod
-    .string()
-    .nullable()
-    .describe(
-      "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+export const ListSimulationsResponseItem = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    appName: zod.string(),
+    appUrl: zod.string(),
+    appType: zod.string(),
+    steps: zod.array(
+      zod.object({
+        order: zod.number(),
+        name: zod.string(),
+        description: zod.string(),
+        fields: zod.array(zod.string()),
+        stepType: zod.string(),
+        selector: zod.string().optional(),
+        actionType: zod.string().optional(),
+        confidence: zod.string().optional(),
+        candidateSelectors: zod.array(zod.string()).optional(),
+      }),
     ),
-  recentPassRate: zod
-    .number()
-    .nullable()
-    .describe(
-      "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
-    ),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
-});
+    totalRuns: zod.number(),
+    lastRunStatus: zod.string().nullable(),
+    lastRunAt: zod.string().nullable(),
+    schedule: zod.string().nullable(),
+    alertThreshold: zod.number().nullable(),
+    alertDestination: zod.string().nullable(),
+    webhookEnabled: zod
+      .boolean()
+      .describe("Whether the webhook trigger endpoint is active"),
+    lastAlertedAt: zod.string().nullable(),
+    nextRunAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+      ),
+    recentPassRate: zod
+      .number()
+      .nullable()
+      .describe(
+        "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
+      ),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  })
+  .describe(
+    "Simulation summary returned in list responses. The webhook token is omitted for security.",
+  );
 export const ListSimulationsResponse = zod.array(ListSimulationsResponseItem);
 
 /**
@@ -160,57 +163,74 @@ export const CreateSimulationBody = zod.object({
 });
 
 /**
- * @summary Get a simulation by ID
+ * @summary Get a simulation by ID (includes webhook token)
  */
 export const GetSimulationParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const GetSimulationResponse = zod.object({
-  id: zod.number(),
-  name: zod.string(),
-  appName: zod.string(),
-  appUrl: zod.string(),
-  appType: zod.string(),
-  steps: zod.array(
-    zod.object({
-      order: zod.number(),
-      name: zod.string(),
-      description: zod.string(),
-      fields: zod.array(zod.string()),
-      stepType: zod.string(),
-      selector: zod.string().optional(),
-      actionType: zod.string().optional(),
-      confidence: zod.string().optional(),
-      candidateSelectors: zod.array(zod.string()).optional(),
-    }),
-  ),
-  totalRuns: zod.number(),
-  lastRunStatus: zod.string().nullable(),
-  lastRunAt: zod.string().nullable(),
-  schedule: zod.string().nullable(),
-  alertThreshold: zod.number().nullable(),
-  alertDestination: zod.string().nullable(),
-  webhookToken: zod.string().nullable(),
-  webhookEnabled: zod
-    .boolean()
-    .describe("Whether the webhook trigger endpoint is active"),
-  lastAlertedAt: zod.string().nullable(),
-  nextRunAt: zod
-    .string()
-    .nullable()
-    .describe(
-      "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+export const GetSimulationResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    appName: zod.string(),
+    appUrl: zod.string(),
+    appType: zod.string(),
+    steps: zod.array(
+      zod.object({
+        order: zod.number(),
+        name: zod.string(),
+        description: zod.string(),
+        fields: zod.array(zod.string()),
+        stepType: zod.string(),
+        selector: zod.string().optional(),
+        actionType: zod.string().optional(),
+        confidence: zod.string().optional(),
+        candidateSelectors: zod.array(zod.string()).optional(),
+      }),
     ),
-  recentPassRate: zod
-    .number()
-    .nullable()
-    .describe(
-      "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
-    ),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
-});
+    totalRuns: zod.number(),
+    lastRunStatus: zod.string().nullable(),
+    lastRunAt: zod.string().nullable(),
+    schedule: zod.string().nullable(),
+    alertThreshold: zod.number().nullable(),
+    alertDestination: zod.string().nullable(),
+    webhookEnabled: zod
+      .boolean()
+      .describe("Whether the webhook trigger endpoint is active"),
+    lastAlertedAt: zod.string().nullable(),
+    nextRunAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+      ),
+    recentPassRate: zod
+      .number()
+      .nullable()
+      .describe(
+        "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
+      ),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  })
+  .describe(
+    "Simulation summary returned in list responses. The webhook token is omitted for security.",
+  )
+  .and(
+    zod
+      .object({
+        webhookToken: zod
+          .string()
+          .nullable()
+          .describe(
+            "Secret webhook token. Keep this confidential — anyone with this token can trigger a run.",
+          ),
+      })
+      .describe(
+        "Full simulation details including the webhook token. Only returned by GET \/simulations\/:id.",
+      ),
+  );
 
 /**
  * @summary Update a simulation
@@ -263,51 +283,54 @@ export const UpdateSimulationBody = zod.object({
     .describe("Enable or disable the webhook trigger endpoint"),
 });
 
-export const UpdateSimulationResponse = zod.object({
-  id: zod.number(),
-  name: zod.string(),
-  appName: zod.string(),
-  appUrl: zod.string(),
-  appType: zod.string(),
-  steps: zod.array(
-    zod.object({
-      order: zod.number(),
-      name: zod.string(),
-      description: zod.string(),
-      fields: zod.array(zod.string()),
-      stepType: zod.string(),
-      selector: zod.string().optional(),
-      actionType: zod.string().optional(),
-      confidence: zod.string().optional(),
-      candidateSelectors: zod.array(zod.string()).optional(),
-    }),
-  ),
-  totalRuns: zod.number(),
-  lastRunStatus: zod.string().nullable(),
-  lastRunAt: zod.string().nullable(),
-  schedule: zod.string().nullable(),
-  alertThreshold: zod.number().nullable(),
-  alertDestination: zod.string().nullable(),
-  webhookToken: zod.string().nullable(),
-  webhookEnabled: zod
-    .boolean()
-    .describe("Whether the webhook trigger endpoint is active"),
-  lastAlertedAt: zod.string().nullable(),
-  nextRunAt: zod
-    .string()
-    .nullable()
-    .describe(
-      "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+export const UpdateSimulationResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string(),
+    appName: zod.string(),
+    appUrl: zod.string(),
+    appType: zod.string(),
+    steps: zod.array(
+      zod.object({
+        order: zod.number(),
+        name: zod.string(),
+        description: zod.string(),
+        fields: zod.array(zod.string()),
+        stepType: zod.string(),
+        selector: zod.string().optional(),
+        actionType: zod.string().optional(),
+        confidence: zod.string().optional(),
+        candidateSelectors: zod.array(zod.string()).optional(),
+      }),
     ),
-  recentPassRate: zod
-    .number()
-    .nullable()
-    .describe(
-      "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
-    ),
-  createdAt: zod.string(),
-  updatedAt: zod.string(),
-});
+    totalRuns: zod.number(),
+    lastRunStatus: zod.string().nullable(),
+    lastRunAt: zod.string().nullable(),
+    schedule: zod.string().nullable(),
+    alertThreshold: zod.number().nullable(),
+    alertDestination: zod.string().nullable(),
+    webhookEnabled: zod
+      .boolean()
+      .describe("Whether the webhook trigger endpoint is active"),
+    lastAlertedAt: zod.string().nullable(),
+    nextRunAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO 8601 datetime of the next scheduled run, or null if no schedule",
+      ),
+    recentPassRate: zod
+      .number()
+      .nullable()
+      .describe(
+        "Pass rate (0–1) computed from the last 5 completed runs, or null if no runs",
+      ),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  })
+  .describe(
+    "Simulation summary returned in list responses. The webhook token is omitted for security.",
+  );
 
 /**
  * @summary Delete a simulation

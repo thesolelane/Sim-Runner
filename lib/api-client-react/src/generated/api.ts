@@ -26,6 +26,7 @@ import type {
   ScanResult,
   ScanUrlBody,
   Simulation,
+  SimulationDetail,
   SimulationRun,
   SimulationRunDetail,
   SimulationStats,
@@ -527,7 +528,7 @@ export const useCreateSimulation = <
 };
 
 /**
- * @summary Get a simulation by ID
+ * @summary Get a simulation by ID (includes webhook token)
  */
 export const getGetSimulationUrl = (id: number) => {
   return `/api/simulations/${id}`;
@@ -536,8 +537,8 @@ export const getGetSimulationUrl = (id: number) => {
 export const getSimulation = async (
   id: number,
   options?: RequestInit,
-): Promise<Simulation> => {
-  return customFetch<Simulation>(getGetSimulationUrl(id), {
+): Promise<SimulationDetail> => {
+  return customFetch<SimulationDetail>(getGetSimulationUrl(id), {
     ...options,
     method: "GET",
   });
@@ -587,7 +588,7 @@ export type GetSimulationQueryResult = NonNullable<
 export type GetSimulationQueryError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Get a simulation by ID
+ * @summary Get a simulation by ID (includes webhook token)
  */
 
 export function useGetSimulation<

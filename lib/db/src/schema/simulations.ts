@@ -1,6 +1,7 @@
 import { pgTable, text, serial, timestamp, integer, jsonb, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { randomUUID } from "crypto";
 
 export const simulationsTable = pgTable("simulations", {
   id: serial("id").primaryKey(),
@@ -25,7 +26,7 @@ export const simulationsTable = pgTable("simulations", {
   schedule: text("schedule"),
   alertThreshold: integer("alert_threshold"),
   alertDestination: text("alert_destination"),
-  webhookToken: text("webhook_token").unique(),
+  webhookToken: text("webhook_token").unique().$defaultFn(() => randomUUID()),
   webhookEnabled: boolean("webhook_enabled").notNull().default(true),
   lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

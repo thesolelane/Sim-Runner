@@ -107,7 +107,7 @@ paths:
       summary: List all simulations
       responses:
         "200":
-          description: List of simulations
+          description: List of simulations (webhook token omitted for security)
           content:
             application/json:
               schema:
@@ -126,7 +126,7 @@ paths:
               $ref: "#/components/schemas/CreateSimulationBody"
       responses:
         "201":
-          description: Created simulation
+          description: Created simulation (webhook token omitted; retrieve via GET /simulations/:id)
           content:
             application/json:
               schema:
@@ -142,7 +142,7 @@ paths:
     get:
       operationId: getSimulation
       tags: [simulations]
-      summary: Get a simulation by ID
+      summary: Get a simulation by ID (includes webhook token)
       parameters:
         - name: id
           in: path
@@ -151,11 +151,11 @@ paths:
             type: integer
       responses:
         "200":
-          description: Simulation
+          description: Simulation with webhook token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Simulation"
+                $ref: "#/components/schemas/SimulationDetail"
         "404":
           description: Not found
           content:
@@ -180,7 +180,7 @@ paths:
               $ref: "#/components/schemas/UpdateSimulationBody"
       responses:
         "200":
-          description: Updated simulation
+          description: Updated simulation (webhook token omitted; retrieve via GET /simulations/:id)
           content:
             application/json:
               schema:
@@ -637,6 +637,7 @@ components:
 
     Simulation:
       type: object
+      description: "Simulation summary returned in list responses. The webhook token is omitted for security."
       properties:
         id:
           type: integer
@@ -663,8 +664,6 @@ components:
         alertThreshold:
           type: ["integer", "null"]
         alertDestination:
-          type: ["string", "null"]
-        webhookToken:
           type: ["string", "null"]
         webhookEnabled:
           type: boolean
@@ -694,13 +693,24 @@ components:
         - schedule
         - alertThreshold
         - alertDestination
-        - webhookToken
         - webhookEnabled
         - lastAlertedAt
         - nextRunAt
         - recentPassRate
         - createdAt
         - updatedAt
+
+    SimulationDetail:
+      allOf:
+        - $ref: "#/components/schemas/Simulation"
+        - type: object
+          description: "Full simulation details including the webhook token. Only returned by GET /simulations/:id."
+          properties:
+            webhookToken:
+              type: ["string", "null"]
+              description: "Secret webhook token. Keep this confidential — anyone with this token can trigger a run."
+          required:
+            - webhookToken
 
     StepResult:
       type: object

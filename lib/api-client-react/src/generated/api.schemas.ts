@@ -136,6 +136,9 @@ export interface CreateRunBody {
   headedMode?: boolean;
 }
 
+/**
+ * Simulation summary returned in list responses. The webhook token is omitted for security.
+ */
 export interface Simulation {
   id: number;
   name: string;
@@ -154,8 +157,6 @@ export interface Simulation {
   alertThreshold: number | null;
   /** @nullable */
   alertDestination: string | null;
-  /** @nullable */
-  webhookToken: string | null;
   /** Whether the webhook trigger endpoint is active */
   webhookEnabled: boolean;
   /** @nullable */
@@ -173,6 +174,14 @@ export interface Simulation {
   createdAt: string;
   updatedAt: string;
 }
+
+export type SimulationDetail = Simulation & {
+  /**
+   * Secret webhook token. Keep this confidential — anyone with this token can trigger a run.
+   * @nullable
+   */
+  webhookToken: string | null;
+};
 
 export type StepResultGeneratedData = { [key: string]: unknown };
 
