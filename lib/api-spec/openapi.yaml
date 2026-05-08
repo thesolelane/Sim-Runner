@@ -740,6 +740,9 @@ components:
         pqcEnabled:
           type: boolean
           description: "Enable or disable post-quantum TLS security scanning on each run"
+        quantumAlertEnabled:
+          type: boolean
+          description: "When true, sends an alert if the quantum security posture degrades compared to the previous run"
 
     CreateRunBody:
       type: object
@@ -796,6 +799,12 @@ components:
         targetAddress:
           type: ["string", "null"]
           description: "Wallet or smart contract address"
+        quantumAlertEnabled:
+          type: boolean
+          description: "When true, sends an alert if the quantum security posture degrades compared to the previous run"
+        lastQuantumStatus:
+          type: ["string", "null"]
+          description: "Quantum status from the last completed run: 'safe', 'unsafe', or null if no scan has run yet"
         lastAlertedAt:
           type: ["string", "null"]
         lastTestAlertAt:
@@ -825,6 +834,8 @@ components:
         - alertThreshold
         - alertDestination
         - webhookEnabled
+        - quantumAlertEnabled
+        - lastQuantumStatus
         - lastAlertedAt
         - lastTestAlertAt
         - nextRunAt

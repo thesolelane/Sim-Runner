@@ -35,6 +35,8 @@ export const simulationsTable = pgTable("simulations", {
   targetAddress: text("target_address"),
   lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
   lastTestAlertAt: timestamp("last_test_alert_at", { withTimezone: true }),
+  quantumAlertEnabled: boolean("quantum_alert_enabled").notNull().default(false),
+  lastQuantumStatus: text("last_quantum_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

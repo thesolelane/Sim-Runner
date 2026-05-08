@@ -224,6 +224,8 @@ export interface UpdateSimulationBody {
   alertMessage?: string | null;
   /** Enable or disable post-quantum TLS security scanning on each run */
   pqcEnabled?: boolean;
+  /** When true, sends an alert if the quantum security posture degrades compared to the previous run */
+  quantumAlertEnabled?: boolean;
 }
 
 export interface CreateRunBody {
@@ -273,6 +275,13 @@ export interface Simulation {
    * @nullable
    */
   targetAddress: string | null;
+  /** When true, sends an alert if the quantum security posture degrades compared to the previous run */
+  quantumAlertEnabled: boolean;
+  /**
+   * Quantum status from the last completed run: 'safe', 'unsafe', or null if no scan has run yet
+   * @nullable
+   */
+  lastQuantumStatus: string | null;
   /** @nullable */
   lastAlertedAt: string | null;
   /**

@@ -336,6 +336,17 @@ export const ListSimulationsResponseItem = zod
       .string()
       .nullable()
       .describe("Wallet or smart contract address"),
+    quantumAlertEnabled: zod
+      .boolean()
+      .describe(
+        "When true, sends an alert if the quantum security posture degrades compared to the previous run",
+      ),
+    lastQuantumStatus: zod
+      .string()
+      .nullable()
+      .describe(
+        "Quantum status from the last completed run: 'safe', 'unsafe', or null if no scan has run yet",
+      ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -461,6 +472,17 @@ export const GetSimulationResponse = zod
       .string()
       .nullable()
       .describe("Wallet or smart contract address"),
+    quantumAlertEnabled: zod
+      .boolean()
+      .describe(
+        "When true, sends an alert if the quantum security posture degrades compared to the previous run",
+      ),
+    lastQuantumStatus: zod
+      .string()
+      .nullable()
+      .describe(
+        "Quantum status from the last completed run: 'safe', 'unsafe', or null if no scan has run yet",
+      ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -562,6 +584,12 @@ export const UpdateSimulationBody = zod.object({
     .describe(
       "Enable or disable post-quantum TLS security scanning on each run",
     ),
+  quantumAlertEnabled: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, sends an alert if the quantum security posture degrades compared to the previous run",
+    ),
 });
 
 export const UpdateSimulationResponse = zod
@@ -612,6 +640,17 @@ export const UpdateSimulationResponse = zod
       .string()
       .nullable()
       .describe("Wallet or smart contract address"),
+    quantumAlertEnabled: zod
+      .boolean()
+      .describe(
+        "When true, sends an alert if the quantum security posture degrades compared to the previous run",
+      ),
+    lastQuantumStatus: zod
+      .string()
+      .nullable()
+      .describe(
+        "Quantum status from the last completed run: 'safe', 'unsafe', or null if no scan has run yet",
+      ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()

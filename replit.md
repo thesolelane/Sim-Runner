@@ -59,4 +59,6 @@ Cooperanth is an onboarding simulation platform: scan any web app URL, auto-dete
 - `drizzle-kit push` is interactive — use `psql $DATABASE_URL -c "ALTER TABLE..."` for CI or scripted migrations
 - Existing simulations created before the monitoring columns were added won't have `webhookToken` — must be set via SQL: `UPDATE simulations SET webhook_token = gen_random_uuid()::text WHERE webhook_token IS NULL`
 - `headed_mode` and `video_path` columns on `simulation_runs` must exist in the DB (added via raw SQL if drizzle push wasn't run)
+- `quantum_scan_result` column on `simulation_runs` must exist: `ALTER TABLE simulation_runs ADD COLUMN IF NOT EXISTS quantum_scan_result jsonb;`
+- `quantum_alert_enabled` and `last_quantum_status` columns on `simulations` must exist: `ALTER TABLE simulations ADD COLUMN IF NOT EXISTS quantum_alert_enabled boolean NOT NULL DEFAULT false; ALTER TABLE simulations ADD COLUMN IF NOT EXISTS last_quantum_status text;`
 - `Select` component (shadcn/ui) does not accept empty string values — use a sentinel like `"none"` for disabled/unset states

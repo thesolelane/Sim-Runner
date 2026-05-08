@@ -72,6 +72,7 @@ export default function SimulationDetail() {
   const [alertMessage, setAlertMessage] = useState("");
   const [webhookEnabled, setWebhookEnabled] = useState<boolean | null>(null);
   const [pqcEnabled, setPqcEnabled] = useState(false);
+  const [quantumAlertEnabled, setQuantumAlertEnabled] = useState<boolean | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsInitialized, setSettingsInitialized] = useState(false);
 
@@ -80,7 +81,9 @@ export default function SimulationDetail() {
       setAlertThreshold([simulation.alertThreshold ?? 80]);
       setAlertDestination(simulation.alertDestination ?? "");
       setAlertMessage(simulation.alertMessage ?? "");
+      setWebhookEnabled(simulation.webhookEnabled ?? true);
       setPqcEnabled(simulation.pqcEnabled ?? false);
+      setQuantumAlertEnabled(simulation.quantumAlertEnabled ?? false);
       setSettingsInitialized(true);
     }
   }, [simulation, settingsInitialized]);
@@ -116,6 +119,7 @@ export default function SimulationDetail() {
     const schedule = effectiveSchedule || null;
 
     const webhookEnabledValue = webhookEnabled !== null ? webhookEnabled : (simulation?.webhookEnabled ?? true);
+    const quantumAlertEnabledValue = quantumAlertEnabled !== null ? quantumAlertEnabled : (simulation?.quantumAlertEnabled ?? false);
 
     updateSimMutation.mutate(
       {
@@ -127,6 +131,7 @@ export default function SimulationDetail() {
           alertMessage: alertMessage.trim() || null,
           webhookEnabled: webhookEnabledValue,
           pqcEnabled,
+          quantumAlertEnabled: quantumAlertEnabledValue,
         } as Parameters<typeof updateSimMutation.mutate>[0]["data"],
       },
       {
@@ -513,6 +518,20 @@ export default function SimulationDetail() {
                       : <span className="italic">Never tested</span>
                     }
                   </p>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+                  <div>
+                    <p className="text-sm font-medium">Quantum security alerts</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(quantumAlertEnabled !== null ? quantumAlertEnabled : (simulation.quantumAlertEnabled ?? false))
+                        ? "Alert when quantum posture drops from Safe to Unsafe"
+                        : "Disabled — no alert sent on quantum regression"}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={quantumAlertEnabled !== null ? quantumAlertEnabled : (simulation.quantumAlertEnabled ?? false)}
+                    onCheckedChange={setQuantumAlertEnabled}
+                  />
                 </div>
                 <div>
                   <Label className="mb-2 block text-sm">Custom message <span className="text-muted-foreground font-normal">(optional)</span></Label>

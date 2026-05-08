@@ -18,7 +18,7 @@ import {
 import { CronExpressionParser } from "cron-parser";
 import { runSimulation, NIX_LIB_PATHS } from "../lib/engine";
 import { registerSchedule, unregisterSchedule } from "../lib/scheduling";
-import { checkAndSendAlert, sendTestAlert } from "../lib/alerting";
+import { checkAndSendAlert, checkAndSendQuantumAlert, sendTestAlert } from "../lib/alerting";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { scanQuantumSecurity } from "../lib/quantum-scanner";
 import { scanBlockchainAddress, SUPPORTED_CHAINS, type ChainId } from "../lib/blockchain-scanner";
@@ -1064,6 +1064,7 @@ router.patch("/simulations/:id", async (req, res): Promise<void> => {
   if (parsed.data.webhookEnabled !== undefined) updateData.webhookEnabled = parsed.data.webhookEnabled;
   if (parsed.data.alertMessage !== undefined) updateData.alertMessage = parsed.data.alertMessage;
   if (parsed.data.pqcEnabled !== undefined) updateData.pqcEnabled = parsed.data.pqcEnabled;
+  if (parsed.data.quantumAlertEnabled !== undefined) updateData.quantumAlertEnabled = parsed.data.quantumAlertEnabled;
 
   const [existing] = await db
     .select({ webhookToken: simulationsTable.webhookToken })
@@ -1333,12 +1334,18 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     })
     .returning();
 
+  const previousQuantumStatus = simulation.lastQuantumStatus ?? null;
+  const newQuantumStatus = quantumScanResult
+    ? (quantumScanResult.quantumSafe ? "safe" : "unsafe")
+    : null;
+
   await db
     .update(simulationsTable)
     .set({
       totalRuns: sql`${simulationsTable.totalRuns} + 1`,
       lastRunStatus: overallStatus,
       lastRunAt: new Date(),
+      ...(newQuantumStatus !== null ? { lastQuantumStatus: newQuantumStatus } : {}),
     })
     .where(eq(simulationsTable.id, id));
 
@@ -1346,6 +1353,11 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     ? (blockchainScanResult?.error ? 0 : 1)
     : (steps.length > 0 ? passedSteps / steps.length : 0);
   await checkAndSendAlert(id, simulation.name, passRate);
+
+  const appDomain = (process.env["REPLIT_DOMAINS"] ?? "").split(",")[0]?.trim()
+    ? `https://${(process.env["REPLIT_DOMAINS"] ?? "").split(",")[0]!.trim()}`
+    : `http://localhost:${process.env["PORT"] ?? "8080"}`;
+  await checkAndSendQuantumAlert(id, simulation.name, quantumScanResult, previousQuantumStatus, run.id, appDomain);
 
   logger.info(
     { simulationId: id, runId: run.id, overallStatus, passedSteps, failedSteps },
