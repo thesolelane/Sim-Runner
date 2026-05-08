@@ -21,7 +21,7 @@ import { registerSchedule, unregisterSchedule } from "../lib/scheduling";
 import { checkAndSendAlert, sendTestAlert } from "../lib/alerting";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { scanQuantumSecurity } from "../lib/quantum-scanner";
-import { scanBlockchainAddress, type ChainId } from "../lib/blockchain-scanner";
+import { scanBlockchainAddress, SUPPORTED_CHAINS, type ChainId } from "../lib/blockchain-scanner";
 import { logger } from "../lib/logger";
 import { randomUUID } from "crypto";
 
@@ -709,6 +709,11 @@ router.post("/simulations/scan", async (req, res): Promise<void> => {
       res.status(400).json({ error: "chainId and address are required for blockchain scans" });
       return;
     }
+    const validChainIds = SUPPORTED_CHAINS.map((c) => c.id);
+    if (!validChainIds.includes(chainId as ChainId)) {
+      res.status(400).json({ error: `Unsupported chainId '${chainId}'. Valid options: ${validChainIds.join(", ")}` });
+      return;
+    }
     const blockchainResult = await scanBlockchainAddress(chainId as ChainId, address);
     res.json({
       appName: parsed.data.appName,
@@ -950,6 +955,14 @@ router.post("/simulations", async (req, res): Promise<void> => {
   if (isBlockchain && (!parsed.data.chainId || !parsed.data.targetAddress)) {
     res.status(400).json({ error: "chainId and targetAddress are required for blockchain simulations" });
     return;
+  }
+
+  if (isBlockchain && parsed.data.chainId) {
+    const validChainIds = SUPPORTED_CHAINS.map((c) => c.id);
+    if (!validChainIds.includes(parsed.data.chainId as ChainId)) {
+      res.status(400).json({ error: `Unsupported chainId '${parsed.data.chainId}'. Valid options: ${validChainIds.join(", ")}` });
+      return;
+    }
   }
 
   const [simulation] = await db

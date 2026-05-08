@@ -38,6 +38,9 @@ export const simulationRunsTable = pgTable("simulation_runs", {
     dataSize: number | null;
     executable: boolean | null;
     owner: string | null;
+    bytecodeHash: string | null;
+    isPda: boolean | null;
+    isNativeProgram: boolean | null;
     explorerUrl: string;
     quantumRoadmap: {
       status: string;

@@ -210,7 +210,16 @@ export default function SimulationDetail() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{simulation.name}</h1>
           <div className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
-            <span>Target: <a href={simulation.appUrl} target="_blank" rel="noreferrer" className="underline hover:text-foreground">{simulation.appUrl}</a></span>
+            {simulation.scanType === "blockchain" ? (
+              <>
+                <Wallet className="h-3.5 w-3.5 shrink-0" />
+                <span className="capitalize font-medium text-foreground">{simulation.chainId}</span>
+                <span>•</span>
+                <span className="font-mono text-xs truncate max-w-[260px]">{simulation.targetAddress}</span>
+              </>
+            ) : (
+              <span>Target: <a href={simulation.appUrl} target="_blank" rel="noreferrer" className="underline hover:text-foreground">{simulation.appUrl}</a></span>
+            )}
             <span>•</span>
             <Badge variant="outline">{simulation.appType}</Badge>
             {simulation.schedule && (
