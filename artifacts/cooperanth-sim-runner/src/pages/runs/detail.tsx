@@ -52,10 +52,19 @@ function severityConfig(severity: QuantumSeverity) {
   };
 }
 
-function QuantumSecurityCard({ result }: { result: QuantumScanResult | null | undefined }) {
+function QuantumSecurityCard({
+  result,
+  pqcEnabled,
+}: {
+  result: QuantumScanResult | null | undefined;
+  pqcEnabled?: boolean;
+}) {
   const [explainerOpen, setExplainerOpen] = useState(false);
 
   if (result === undefined || result === null) {
+    const message = pqcEnabled === false
+      ? "Post-quantum scanning is not enabled for this simulation. Turn it on in the simulation's Settings tab."
+      : "Scan unavailable — this run was completed before quantum security scanning was introduced.";
     return (
       <Card>
         <CardHeader>
@@ -65,9 +74,7 @@ function QuantumSecurityCard({ result }: { result: QuantumScanResult | null | un
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Scan unavailable — this run was completed before quantum security scanning was introduced.
-          </p>
+          <p className="text-sm text-muted-foreground">{message}</p>
         </CardContent>
       </Card>
     );
@@ -539,7 +546,7 @@ export default function RunDetail() {
         </CardContent>
       </Card>
 
-      <QuantumSecurityCard result={quantumScanResult} />
+      <QuantumSecurityCard result={quantumScanResult} pqcEnabled={simulation?.pqcEnabled} />
     </div>
   );
 }

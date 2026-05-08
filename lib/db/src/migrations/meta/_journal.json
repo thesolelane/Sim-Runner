@@ -43,6 +43,13 @@
       "when": 1746748800000,
       "tag": "0005_add_alert_message",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1746835200000,
+      "tag": "0006_add_pqc_enabled",
+      "breakpoints": true
     }
   ]
 }
