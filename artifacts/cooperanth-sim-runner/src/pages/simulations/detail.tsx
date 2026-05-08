@@ -10,6 +10,8 @@ import {
   getListRunsQueryKey,
   getGetSimulationStatsQueryKey,
   getListSimulationsQueryKey,
+  type SimulationRun,
+  type QuantumScanResult,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +24,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert, Wallet, ExternalLink } from "lucide-react";
+import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert, ShieldCheck, ShieldX, TrendingUp, TrendingDown, Minus, Wallet, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +37,246 @@ const SCHEDULE_PRESETS = [
   { label: "Every week (Mon 9am)", value: "0 9 * * 1" },
   { label: "Custom cron expression", value: "custom" },
 ];
+
+type QuantumFieldChange = {
+  field: string;
+  prev: string | null;
+  curr: string | null;
+  direction: "improved" | "degraded" | "changed";
+};
+
+type QuantumHistoryEntry = {
+  run: SimulationRun;
+  result: QuantumScanResult;
+  changes: QuantumFieldChange[];
+  isFirst: boolean;
+};
+
+function computeQuantumChanges(
+  curr: QuantumScanResult,
+  prev: QuantumScanResult,
+): QuantumFieldChange[] {
+  const changes: QuantumFieldChange[] = [];
+
+  if (curr.quantumSafe !== prev.quantumSafe) {
+    changes.push({
+      field: "Quantum posture",
+      prev: prev.quantumSafe ? "Safe" : "At Risk",
+      curr: curr.quantumSafe ? "Safe" : "At Risk",
+      direction: curr.quantumSafe ? "improved" : "degraded",
+    });
+  }
+
+  if (curr.tlsVersion !== prev.tlsVersion && (curr.tlsVersion || prev.tlsVersion)) {
+    const parseTlsVersion = (v: string | null | undefined): number => {
+      const match = (v ?? "").match(/(\d+(?:\.\d+)?)/);
+      return match ? parseFloat(match[1]) : 0;
+    };
+    const currV = parseTlsVersion(curr.tlsVersion);
+    const prevV = parseTlsVersion(prev.tlsVersion);
+    changes.push({
+      field: "TLS Version",
+      prev: prev.tlsVersion ?? null,
+      curr: curr.tlsVersion ?? null,
+      direction: currV > prevV ? "improved" : currV < prevV ? "degraded" : "changed",
+    });
+  }
+
+  if (curr.httpVersion !== prev.httpVersion && (curr.httpVersion || prev.httpVersion)) {
+    const parseHttpVersion = (v: string | null | undefined): number => {
+      const match = (v ?? "").match(/(\d+(?:\.\d+)?)/);
+      return match ? parseFloat(match[1]) : 0;
+    };
+    const currV = parseHttpVersion(curr.httpVersion);
+    const prevV = parseHttpVersion(prev.httpVersion);
+    changes.push({
+      field: "HTTP Version",
+      prev: prev.httpVersion ?? null,
+      curr: curr.httpVersion ?? null,
+      direction: currV > prevV ? "improved" : currV < prevV ? "degraded" : "changed",
+    });
+  }
+
+  if (curr.keyExchange !== prev.keyExchange && (curr.keyExchange || prev.keyExchange)) {
+    const pqKeywords = ["Kyber", "ML-KEM", "X25519Kyber", "hybrid"];
+    const currIsPq = pqKeywords.some((kw) => (curr.keyExchange ?? "").includes(kw));
+    const prevIsPq = pqKeywords.some((kw) => (prev.keyExchange ?? "").includes(kw));
+    changes.push({
+      field: "Key Exchange",
+      prev: prev.keyExchange ?? null,
+      curr: curr.keyExchange ?? null,
+      direction: currIsPq && !prevIsPq ? "improved" : !currIsPq && prevIsPq ? "degraded" : "changed",
+    });
+  }
+
+  if (
+    curr.certSignatureAlgorithm !== prev.certSignatureAlgorithm &&
+    (curr.certSignatureAlgorithm || prev.certSignatureAlgorithm)
+  ) {
+    changes.push({
+      field: "Cert Signature",
+      prev: prev.certSignatureAlgorithm ?? null,
+      curr: curr.certSignatureAlgorithm ?? null,
+      direction: "changed",
+    });
+  }
+
+  return changes;
+}
+
+function QuantumChangeChip({ change }: { change: QuantumFieldChange }) {
+  if (change.direction === "improved") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+        <TrendingUp className="h-2.5 w-2.5" />
+        {change.field} upgraded
+      </span>
+    );
+  }
+  if (change.direction === "degraded") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-red-700 bg-red-50 border border-red-200 rounded-full px-2 py-0.5">
+        <TrendingDown className="h-2.5 w-2.5" />
+        {change.field} downgraded
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+      <Minus className="h-2.5 w-2.5" />
+      {change.field} changed
+    </span>
+  );
+}
+
+function QuantumHistorySection({ runs, simId }: { runs: SimulationRun[]; simId: number }) {
+  const runsWithQuantum = runs
+    .filter((r) => r.quantumScanResult != null && !(r.quantumScanResult as QuantumScanResult).error)
+    .sort((a, b) => a.id - b.id);
+
+  if (runsWithQuantum.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldAlert className="h-5 w-5 text-purple-600" />
+            Quantum Security History
+          </CardTitle>
+          <CardDescription>TLS posture changes across runs</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No quantum scan results yet. Run the simulation to start collecting data.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const entries: QuantumHistoryEntry[] = runsWithQuantum.map((run, idx) => {
+    const result = run.quantumScanResult as QuantumScanResult;
+    const prev = idx > 0 ? (runsWithQuantum[idx - 1].quantumScanResult as QuantumScanResult) : null;
+    return {
+      run,
+      result,
+      changes: prev ? computeQuantumChanges(result, prev) : [],
+      isFirst: idx === 0,
+    };
+  });
+
+  const displayEntries = [...entries].reverse();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldAlert className="h-5 w-5 text-purple-600" />
+          Quantum Security History
+        </CardTitle>
+        <CardDescription>
+          TLS posture across {runsWithQuantum.length} run{runsWithQuantum.length !== 1 ? "s" : ""} — changes between consecutive scans are highlighted
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="relative border-l-2 border-muted ml-3 pl-6 space-y-5">
+          {displayEntries.map((entry) => {
+            const { run, result, changes, isFirst } = entry;
+            const safe = result.quantumSafe;
+
+            return (
+              <div key={run.id} className="relative">
+                <div
+                  className={`absolute -left-[31px] top-1.5 h-3 w-3 rounded-full border-2 ${
+                    safe
+                      ? "bg-green-500 border-green-600"
+                      : "bg-yellow-400 border-yellow-500"
+                  }`}
+                />
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link
+                      href={`/simulations/${simId}/runs/${run.id}`}
+                      className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {format(new Date(run.startedAt), "MMM d, HH:mm")}
+                    </Link>
+                    {safe ? (
+                      <Badge className="h-5 text-[10px] gap-1 bg-green-100 text-green-700 border-green-200">
+                        <ShieldCheck className="h-3 w-3" />
+                        Quantum-Safe
+                      </Badge>
+                    ) : (
+                      <Badge className="h-5 text-[10px] gap-1 bg-yellow-100 text-yellow-700 border-yellow-200">
+                        <ShieldAlert className="h-3 w-3" />
+                        At Risk
+                      </Badge>
+                    )}
+                    {isFirst && (
+                      <span className="text-[10px] text-muted-foreground italic">first scan</span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 flex-wrap text-xs text-muted-foreground font-mono">
+                    {result.tlsVersion && (
+                      <span>
+                        <span className="uppercase tracking-wider text-[10px] font-sans font-medium text-muted-foreground not-italic mr-1">TLS</span>
+                        {result.tlsVersion}
+                      </span>
+                    )}
+                    {result.httpVersion && (
+                      <span>
+                        <span className="uppercase tracking-wider text-[10px] font-sans font-medium text-muted-foreground not-italic mr-1">HTTP</span>
+                        {result.httpVersion}
+                      </span>
+                    )}
+                    {result.keyExchange && (
+                      <span>
+                        <span className="uppercase tracking-wider text-[10px] font-sans font-medium text-muted-foreground not-italic mr-1">KEX</span>
+                        {result.keyExchange}
+                      </span>
+                    )}
+                  </div>
+
+                  {changes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-0.5">
+                      {changes.map((change, i) => (
+                        <QuantumChangeChip key={i} change={change} />
+                      ))}
+                    </div>
+                  )}
+
+                  {!isFirst && changes.length === 0 && (
+                    <span className="text-[10px] text-muted-foreground italic">No change from previous scan</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function isSlackUrl(val: string) {
   return val.startsWith("https://hooks.slack.com/");
@@ -335,6 +577,31 @@ export default function SimulationDetail() {
                   </CardContent>
                 </Card>
               )}
+
+              {(() => {
+                const hasQuantumData = runs?.some((r) => r.quantumScanResult != null);
+                const showSection = simulation.pqcEnabled || hasQuantumData;
+                if (!showSection) return null;
+                if (runsLoading) {
+                  return (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <ShieldAlert className="h-5 w-5 text-purple-600" />
+                          Quantum Security History
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <Skeleton className="h-12 w-full" />
+                          <Skeleton className="h-12 w-full" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                return runs ? <QuantumHistorySection runs={runs} simId={simId} /> : null;
+              })()}
             </div>
 
             <div className="space-y-6">
