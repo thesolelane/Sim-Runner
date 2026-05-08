@@ -6,7 +6,12 @@ import { checkAndSendAlert } from "./alerting";
 import { ObjectStorageService } from "./objectStorage";
 import { logger } from "./logger";
 
-const VIDEO_RETENTION_DAYS = parseInt(process.env.VIDEO_RETENTION_DAYS ?? "30", 10);
+const _rawRetention = parseInt(process.env.VIDEO_RETENTION_DAYS ?? "30", 10);
+const VIDEO_RETENTION_DAYS: number = Number.isFinite(_rawRetention) && _rawRetention > 0 ? _rawRetention : 30;
+if (_rawRetention !== VIDEO_RETENTION_DAYS) {
+  // Will surface once logger is available; keep as a best-effort console warn at module init
+  console.warn(`VIDEO_RETENTION_DAYS invalid ("${process.env.VIDEO_RETENTION_DAYS}"), falling back to 30 days`);
+}
 const objectStorage = new ObjectStorageService();
 
 const scheduledTasks = new Map<number, ScheduledTask>();
@@ -190,7 +195,7 @@ export async function initializeSchedules(): Promise<void> {
     purgeOldVideoRecordings().catch((err) => {
       logger.error({ err }, "Unhandled error in video purge job");
     });
-  });
+  }, { timezone: "UTC" });
 
   logger.info({ retentionDays: VIDEO_RETENTION_DAYS }, "Video retention cleanup scheduled (daily 03:00 UTC)");
 }

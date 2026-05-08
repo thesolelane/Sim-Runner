@@ -1,0 +1,57 @@
+Prompt for Replit Developer
+Subject: Post‑Quantum Cryptography (PQC) Audit & Hardening – Quote Request
+
+Context:
+We are building a [describe your app: e.g., “SaaS dashboard that stores user documents and API keys”].
+I want to future‑proof this app against quantum computing threats. The goal is not full migration yet, but:
+
+Audit current cryptographic usage (TLS, signatures, key exchange, hashing, token signing).
+
+Identify gaps where quantum computers would break existing algorithms (RSA, ECC, ECDSA, Ed25519).
+
+Implement a hardening plan that introduces crypto‑agility and hybrid PQC (ML‑KEM + classical) for critical paths, without breaking current functionality.
+
+Tech stack: [Fill in – e.g., Node.js / Python / Flask / Next.js on Replit with PostgreSQL, using JWT, bcrypt, etc.]
+
+Deliverables requested:
+
+Full crypto inventory – list all places where public‑key crypto is used (libraries, endpoints, background jobs).
+
+Risk report – tag each item with “breakable by RSA‑2048‑capable QC” and estimate data lifespan risk (“Harvest now, decrypt later”).
+
+Crypto‑agility design – propose interfaces/abstractions (e.g., a KEM factory) so we can swap algorithms later.
+
+Hardening code examples – implement at least one hybrid PQC key exchange (ML‑KEM + X25519) for a critical API or session setup, using an audited library (liboqs wrapper or @noble/post-quantum in JS).
+
+Testing & performance notes – impact on latency, memory, and bundle size on Replit’s environment.
+
+Price strategy (choose one):
+
+Fixed price: $ [e.g., 1,200–2,500] for the full audit + one hybrid integration (delivered in 2 weeks).
+
+Tiered:
+
+*Tier 1 (audit + crypto‑agility plan)* – $[e.g., 600]
+
+*Tier 2 (Tier 1 + hybrid PQC code in one module)* – $[e.g., 1,200]
+
+*Tier 3 (full hardening + CI checks for PQC deprecation)* – $[e.g., 2,000]
+
+Hourly: $[X]/hour, with上限 [Y] hours, delivering at least the audit by [date].
+
+Please send back:
+
+Which price option you recommend.
+
+Estimated timeline per deliverable.
+
+Any assumptions (e.g., “no hardware HSM required”, “Replit’s native TLS termination cannot be modified – we’ll focus on app‑level crypto”).
+
+Acceptance criteria:
+
+Code runs on Replit without extra paid services.
+
+Existing non‑PQC flows remain functional (hybrid mode = fallback to classical if PQ fails).
+
+Clear documentation of new crypto functions for future maintainers.
+
