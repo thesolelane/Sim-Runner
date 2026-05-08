@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { useGetSimulationStats, useListSimulations, getListRunsQueryKey } from "@workspace/api-client-react";
+import { useGetSimulationStats, useListSimulations, getListRunsQueryKey, listRuns } from "@workspace/api-client-react";
 import { useQueries } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,32 +20,19 @@ export default function ReportsPage() {
   const runQueries = useQueries({
     queries: (simulations ?? []).map((sim) => ({
       queryKey: getListRunsQueryKey(sim.id),
-      queryFn: async () => {
-        const res = await fetch(`/api/simulations/${sim.id}/runs`);
-        if (!res.ok) throw new Error("Failed to fetch runs");
-        const data = await res.json();
-        return { simId: sim.id, simName: sim.name, runs: data };
-      },
+      queryFn: () => listRuns(sim.id),
       enabled: !!simulations?.length,
     })),
   });
 
   const allRuns = runQueries
-    .flatMap((q) => {
-      if (!q.data || !Array.isArray(q.data.runs)) return [];
-      return (q.data.runs as Array<{
-        id: number;
-        status: string;
-        totalSteps: number;
-        passedSteps: number;
-        failedSteps: number;
-        durationMs: number | null;
-        startedAt: string;
-        completedAt: string | null;
-      }>).map((run) => ({
+    .flatMap((q, i) => {
+      const sim = (simulations ?? [])[i];
+      if (!q.data || !Array.isArray(q.data) || !sim) return [];
+      return q.data.map((run) => ({
         ...run,
-        simId: q.data!.simId,
-        simName: q.data!.simName,
+        simId: sim.id,
+        simName: sim.name,
       }));
     })
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
