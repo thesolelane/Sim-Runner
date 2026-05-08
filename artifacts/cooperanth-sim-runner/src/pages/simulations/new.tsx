@@ -38,7 +38,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  ShieldAlert,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import type {
   DetectedStep,
@@ -91,6 +93,7 @@ export default function NewSimulation() {
   const [url, setUrl] = useState("");
   const [appName, setAppName] = useState("");
   const [simName, setSimName] = useState("");
+  const [pqcEnabled, setPqcEnabled] = useState(false);
 
   const scanUrlMutation = useScanUrl();
   const [editableSteps, setEditableSteps] = useState<EditableStep[]>([]);
@@ -219,6 +222,7 @@ export default function NewSimulation() {
           appUrl: url,
           appType: "web",
           steps: payloadSteps,
+          pqcEnabled,
         },
       },
       {
@@ -287,6 +291,24 @@ export default function NewSimulation() {
                 placeholder="https://app.example.com/signup"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
+              />
+            </div>
+            <div className="flex items-start justify-between rounded-lg border p-3 bg-muted/30">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="h-4 w-4 mt-0.5 text-purple-600 shrink-0" />
+                <div>
+                  <Label htmlFor="pqc-toggle" className="text-sm font-medium cursor-pointer">
+                    Post-Quantum Check
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Inspect the target URL's TLS handshake for quantum-vulnerable algorithms on each run.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="pqc-toggle"
+                checked={pqcEnabled}
+                onCheckedChange={setPqcEnabled}
               />
             </div>
           </CardContent>

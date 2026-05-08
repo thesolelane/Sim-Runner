@@ -593,6 +593,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FlowStep"
+        pqcEnabled:
+          type: boolean
+          description: "Enable post-quantum TLS security scanning on each run"
       required:
         - name
         - appName
@@ -630,6 +633,9 @@ components:
         alertMessage:
           type: ["string", "null"]
           description: "Optional custom message appended to all alerts (real and test) for this simulation"
+        pqcEnabled:
+          type: boolean
+          description: "Enable or disable post-quantum TLS security scanning on each run"
 
     CreateRunBody:
       type: object
@@ -674,6 +680,9 @@ components:
         alertMessage:
           type: ["string", "null"]
           description: "Optional custom message appended to all alerts for this simulation"
+        pqcEnabled:
+          type: boolean
+          description: "Whether post-quantum TLS security scanning is enabled for each run"
         lastAlertedAt:
           type: ["string", "null"]
         lastTestAlertAt:
@@ -707,6 +716,7 @@ components:
         - lastTestAlertAt
         - nextRunAt
         - recentPassRate
+        - pqcEnabled
         - createdAt
         - updatedAt
 

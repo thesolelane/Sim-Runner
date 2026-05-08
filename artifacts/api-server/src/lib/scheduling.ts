@@ -78,14 +78,16 @@ async function executeScheduledRun(simulationId: number): Promise<void> {
   }
 
   let quantumScanResult = null;
-  try {
-    quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
-    logger.info(
-      { simulationId, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
-      "Quantum scan complete (scheduled run)",
-    );
-  } catch (err) {
-    logger.warn({ err, simulationId }, "Quantum scan failed — scheduled run unaffected");
+  if (simulation.pqcEnabled) {
+    try {
+      quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+      logger.info(
+        { simulationId, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+        "Quantum scan complete (scheduled run)",
+      );
+    } catch (err) {
+      logger.warn({ err, simulationId }, "Quantum scan failed — scheduled run unaffected");
+    }
   }
 
   const passedSteps = stepResults.filter((s) => s.status === "passed").length;

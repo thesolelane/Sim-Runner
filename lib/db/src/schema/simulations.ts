@@ -29,6 +29,7 @@ export const simulationsTable = pgTable("simulations", {
   webhookToken: text("webhook_token").unique().$defaultFn(() => randomUUID()),
   alertMessage: text("alert_message"),
   webhookEnabled: boolean("webhook_enabled").notNull().default(true),
+  pqcEnabled: boolean("pqc_enabled").notNull().default(false),
   lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
   lastTestAlertAt: timestamp("last_test_alert_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

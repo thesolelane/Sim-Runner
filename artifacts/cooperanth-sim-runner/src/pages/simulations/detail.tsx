@@ -22,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle } from "lucide-react";
+import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,6 +71,7 @@ export default function SimulationDetail() {
   const [alertDestination, setAlertDestination] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
   const [webhookEnabled, setWebhookEnabled] = useState<boolean | null>(null);
+  const [pqcEnabled, setPqcEnabled] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsInitialized, setSettingsInitialized] = useState(false);
 
@@ -79,6 +80,7 @@ export default function SimulationDetail() {
       setAlertThreshold([simulation.alertThreshold ?? 80]);
       setAlertDestination(simulation.alertDestination ?? "");
       setAlertMessage(simulation.alertMessage ?? "");
+      setPqcEnabled(simulation.pqcEnabled ?? false);
       setSettingsInitialized(true);
     }
   }, [simulation, settingsInitialized]);
@@ -124,6 +126,7 @@ export default function SimulationDetail() {
           alertDestination: destination,
           alertMessage: alertMessage.trim() || null,
           webhookEnabled: webhookEnabledValue,
+          pqcEnabled,
         } as Parameters<typeof updateSimMutation.mutate>[0]["data"],
       },
       {
@@ -473,6 +476,34 @@ export default function SimulationDetail() {
                     rows={3}
                   />
                   <p className="text-xs text-muted-foreground mt-1">Appended to both real alerts and test alerts.</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShieldAlert className="h-5 w-5 text-purple-600" />
+                  Post-Quantum Check
+                </CardTitle>
+                <CardDescription>
+                  When enabled, each run will inspect the target URL's TLS handshake for quantum-vulnerable algorithms.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-start justify-between rounded-lg border p-3 bg-muted/30">
+                  <div>
+                    <p className="text-sm font-medium">Scan on every run</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {pqcEnabled
+                        ? "TLS handshake will be inspected after each run — results appear in the run report."
+                        : "Quantum security scanning is disabled for this simulation."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={pqcEnabled}
+                    onCheckedChange={setPqcEnabled}
+                  />
                 </div>
               </CardContent>
             </Card>

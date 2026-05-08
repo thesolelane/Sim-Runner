@@ -104,6 +104,8 @@ export interface CreateSimulationBody {
   appUrl: string;
   appType: string;
   steps: FlowStep[];
+  /** Enable post-quantum TLS security scanning on each run */
+  pqcEnabled?: boolean;
 }
 
 export interface UpdateSimulationBody {
@@ -134,6 +136,8 @@ export interface UpdateSimulationBody {
    * @nullable
    */
   alertMessage?: string | null;
+  /** Enable or disable post-quantum TLS security scanning on each run */
+  pqcEnabled?: boolean;
 }
 
 export interface CreateRunBody {
@@ -169,6 +173,8 @@ export interface Simulation {
    * @nullable
    */
   alertMessage?: string | null;
+  /** Whether post-quantum TLS security scanning is enabled for each run */
+  pqcEnabled: boolean;
   /** @nullable */
   lastAlertedAt: string | null;
   /**

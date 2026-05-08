@@ -189,6 +189,11 @@ export const ListSimulationsResponseItem = zod
       .describe(
         "Optional custom message appended to all alerts for this simulation",
       ),
+    pqcEnabled: zod
+      .boolean()
+      .describe(
+        "Whether post-quantum TLS security scanning is enabled for each run",
+      ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -237,6 +242,10 @@ export const CreateSimulationBody = zod.object({
       candidateSelectors: zod.array(zod.string()).optional(),
     }),
   ),
+  pqcEnabled: zod
+    .boolean()
+    .optional()
+    .describe("Enable post-quantum TLS security scanning on each run"),
 });
 
 /**
@@ -280,6 +289,11 @@ export const GetSimulationResponse = zod
       .nullish()
       .describe(
         "Optional custom message appended to all alerts for this simulation",
+      ),
+    pqcEnabled: zod
+      .boolean()
+      .describe(
+        "Whether post-quantum TLS security scanning is enabled for each run",
       ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
@@ -376,6 +390,12 @@ export const UpdateSimulationBody = zod.object({
     .describe(
       "Optional custom message appended to all alerts (real and test) for this simulation",
     ),
+  pqcEnabled: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Enable or disable post-quantum TLS security scanning on each run",
+    ),
 });
 
 export const UpdateSimulationResponse = zod
@@ -412,6 +432,11 @@ export const UpdateSimulationResponse = zod
       .nullish()
       .describe(
         "Optional custom message appended to all alerts for this simulation",
+      ),
+    pqcEnabled: zod
+      .boolean()
+      .describe(
+        "Whether post-quantum TLS security scanning is enabled for each run",
       ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod

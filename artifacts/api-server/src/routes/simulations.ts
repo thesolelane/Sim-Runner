@@ -898,6 +898,7 @@ router.post("/simulations", async (req, res): Promise<void> => {
       appUrl: parsed.data.appUrl,
       appType: parsed.data.appType,
       steps: parsed.data.steps,
+      pqcEnabled: parsed.data.pqcEnabled ?? false,
       webhookToken: randomUUID(),
     })
     .returning();
@@ -984,6 +985,7 @@ router.patch("/simulations/:id", async (req, res): Promise<void> => {
   if (parsed.data.alertDestination !== undefined) updateData.alertDestination = parsed.data.alertDestination;
   if (parsed.data.webhookEnabled !== undefined) updateData.webhookEnabled = parsed.data.webhookEnabled;
   if (parsed.data.alertMessage !== undefined) updateData.alertMessage = parsed.data.alertMessage;
+  if (parsed.data.pqcEnabled !== undefined) updateData.pqcEnabled = parsed.data.pqcEnabled;
 
   const [existing] = await db
     .select({ webhookToken: simulationsTable.webhookToken })
@@ -1203,14 +1205,16 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
   }
 
   let quantumScanResult = null;
-  try {
-    quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
-    logger.info(
-      { simulationId: id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
-      "Quantum scan complete",
-    );
-  } catch (err) {
-    logger.warn({ err, simulationId: id }, "Quantum scan failed — run result unaffected");
+  if (simulation.pqcEnabled) {
+    try {
+      quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+      logger.info(
+        { simulationId: id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+        "Quantum scan complete",
+      );
+    } catch (err) {
+      logger.warn({ err, simulationId: id }, "Quantum scan failed — run result unaffected");
+    }
   }
 
   const passedSteps = stepResults.filter((s) => s.status === "passed").length;
