@@ -118,6 +118,12 @@ export const ListSimulationsResponseItem = zod
     webhookEnabled: zod
       .boolean()
       .describe("Whether the webhook trigger endpoint is active"),
+    alertMessage: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional custom message appended to all alerts for this simulation",
+      ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -204,6 +210,12 @@ export const GetSimulationResponse = zod
     webhookEnabled: zod
       .boolean()
       .describe("Whether the webhook trigger endpoint is active"),
+    alertMessage: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional custom message appended to all alerts for this simulation",
+      ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -293,6 +305,12 @@ export const UpdateSimulationBody = zod.object({
     .boolean()
     .optional()
     .describe("Enable or disable the webhook trigger endpoint"),
+  alertMessage: zod
+    .string()
+    .nullish()
+    .describe(
+      "Optional custom message appended to all alerts (real and test) for this simulation",
+    ),
 });
 
 export const UpdateSimulationResponse = zod
@@ -324,6 +342,12 @@ export const UpdateSimulationResponse = zod
     webhookEnabled: zod
       .boolean()
       .describe("Whether the webhook trigger endpoint is active"),
+    alertMessage: zod
+      .string()
+      .nullish()
+      .describe(
+        "Optional custom message appended to all alerts for this simulation",
+      ),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()

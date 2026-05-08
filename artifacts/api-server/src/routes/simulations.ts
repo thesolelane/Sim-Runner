@@ -982,6 +982,7 @@ router.patch("/simulations/:id", async (req, res): Promise<void> => {
   if (parsed.data.alertThreshold !== undefined) updateData.alertThreshold = parsed.data.alertThreshold;
   if (parsed.data.alertDestination !== undefined) updateData.alertDestination = parsed.data.alertDestination;
   if (parsed.data.webhookEnabled !== undefined) updateData.webhookEnabled = parsed.data.webhookEnabled;
+  if (parsed.data.alertMessage !== undefined) updateData.alertMessage = parsed.data.alertMessage;
 
   const [existing] = await db
     .select({ webhookToken: simulationsTable.webhookToken })
@@ -1045,7 +1046,7 @@ router.post("/simulations/:id/test-alert", async (req, res): Promise<void> => {
   }
 
   const [simulation] = await db
-    .select({ id: simulationsTable.id, name: simulationsTable.name, alertDestination: simulationsTable.alertDestination })
+    .select({ id: simulationsTable.id, name: simulationsTable.name, alertDestination: simulationsTable.alertDestination, alertMessage: simulationsTable.alertMessage })
     .from(simulationsTable)
     .where(eq(simulationsTable.id, id));
 
@@ -1069,7 +1070,7 @@ router.post("/simulations/:id/test-alert", async (req, res): Promise<void> => {
 
   let destinationType: string;
   try {
-    ({ destinationType } = await sendTestAlert(destination, simulation.name));
+    ({ destinationType } = await sendTestAlert(destination, simulation.name, simulation.alertMessage));
   } catch (err) {
     const errMessage = err instanceof Error ? err.message : String(err);
     req.log.error({ err, simulationId: id }, "Failed to send test alert");

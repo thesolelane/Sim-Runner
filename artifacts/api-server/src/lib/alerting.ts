@@ -9,16 +9,23 @@ function isSlackUrl(destination: string): boolean {
   return destination.startsWith("https://hooks.slack.com/");
 }
 
-async function sendSlackAlert(webhookUrl: string, simulationName: string, passRate: number, threshold: number): Promise<boolean> {
+async function sendSlackAlert(webhookUrl: string, simulationName: string, passRate: number, threshold: number, customMessage?: string | null): Promise<boolean> {
   const percentage = Math.round(passRate * 100);
+  const mainText = `🚨 *Cooperanth Alert: ${simulationName}*\nPass rate dropped to *${percentage}%* (threshold: ${threshold}%)`;
+  const fullText = customMessage ? `${mainText}\n\n${customMessage}` : mainText;
+
+  const fallbackText = customMessage
+    ? `*Alert: ${simulationName}* — Pass rate dropped to ${percentage}% (threshold: ${threshold}%)\n\n${customMessage}`
+    : `*Alert: ${simulationName}* — Pass rate dropped to ${percentage}% (threshold: ${threshold}%)`;
+
   const body = JSON.stringify({
-    text: `*Alert: ${simulationName}* — Pass rate dropped to ${percentage}% (threshold: ${threshold}%)`,
+    text: fallbackText,
     blocks: [
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `🚨 *Cooperanth Alert: ${simulationName}*\nPass rate dropped to *${percentage}%* (threshold: ${threshold}%)`,
+          text: fullText,
         },
       },
     ],
@@ -36,7 +43,7 @@ async function sendSlackAlert(webhookUrl: string, simulationName: string, passRa
   return true;
 }
 
-async function sendEmailAlert(to: string, simulationName: string, passRate: number, threshold: number): Promise<boolean> {
+async function sendEmailAlert(to: string, simulationName: string, passRate: number, threshold: number, customMessage?: string | null): Promise<boolean> {
   const smtpUrl = process.env["SMTP_URL"];
   if (!smtpUrl) {
     logger.warn("SMTP_URL not set — skipping email alert");
@@ -46,12 +53,22 @@ async function sendEmailAlert(to: string, simulationName: string, passRate: numb
   const transporter = nodemailer.createTransport(smtpUrl);
   const percentage = Math.round(passRate * 100);
 
+  const textBody = [
+    `Alert: Simulation "${simulationName}" pass rate dropped to ${percentage}% (threshold: ${threshold}%). Check your Cooperanth dashboard for details.`,
+    customMessage ? `\n${customMessage}` : null,
+  ].filter(Boolean).join("\n");
+
+  const htmlBody = [
+    `<p><strong>Alert: Simulation "${simulationName}"</strong></p><p>Pass rate dropped to <strong>${percentage}%</strong> (threshold: ${threshold}%).</p><p>Check your Cooperanth dashboard for details.</p>`,
+    customMessage ? `<p>${customMessage}</p>` : null,
+  ].filter(Boolean).join("");
+
   await transporter.sendMail({
     from: process.env["ALERT_FROM_EMAIL"] ?? "alerts@cooperanth.io",
     to,
     subject: `[Cooperanth] Alert: ${simulationName} pass rate at ${percentage}%`,
-    text: `Alert: Simulation "${simulationName}" pass rate dropped to ${percentage}% (threshold: ${threshold}%). Check your Cooperanth dashboard for details.`,
-    html: `<p><strong>Alert: Simulation "${simulationName}"</strong></p><p>Pass rate dropped to <strong>${percentage}%</strong> (threshold: ${threshold}%).</p><p>Check your Cooperanth dashboard for details.</p>`,
+    text: textBody,
+    html: htmlBody,
   });
   return true;
 }
@@ -59,12 +76,13 @@ async function sendEmailAlert(to: string, simulationName: string, passRate: numb
 export async function sendTestAlert(
   destination: string,
   simulationName: string,
+  customMessage?: string | null,
 ): Promise<{ destinationType: "slack" | "email" }> {
   if (isSlackUrl(destination)) {
-    await sendSlackAlert(destination, simulationName, 0.75, 80);
+    await sendSlackAlert(destination, simulationName, 0.75, 80, customMessage);
     return { destinationType: "slack" };
   } else {
-    const dispatched = await sendEmailAlert(destination, simulationName, 0.75, 80);
+    const dispatched = await sendEmailAlert(destination, simulationName, 0.75, 80, customMessage);
     if (!dispatched) {
       throw new Error("Email could not be sent: SMTP_URL is not configured on this server");
     }
@@ -81,6 +99,7 @@ export async function checkAndSendAlert(
     .select({
       alertThreshold: simulationsTable.alertThreshold,
       alertDestination: simulationsTable.alertDestination,
+      alertMessage: simulationsTable.alertMessage,
       lastAlertedAt: simulationsTable.lastAlertedAt,
     })
     .from(simulationsTable)
@@ -105,11 +124,12 @@ export async function checkAndSendAlert(
 
   const destination = sim.alertDestination;
   const threshold = sim.alertThreshold;
+  const customMessage = sim.alertMessage ?? null;
 
   try {
     const dispatched = isSlackUrl(destination)
-      ? await sendSlackAlert(destination, simulationName, passRate, threshold)
-      : await sendEmailAlert(destination, simulationName, passRate, threshold);
+      ? await sendSlackAlert(destination, simulationName, passRate, threshold, customMessage)
+      : await sendEmailAlert(destination, simulationName, passRate, threshold, customMessage);
 
     if (dispatched) {
       await db

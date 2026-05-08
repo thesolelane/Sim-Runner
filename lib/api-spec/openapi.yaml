@@ -627,6 +627,9 @@ components:
         webhookEnabled:
           type: boolean
           description: "Enable or disable the webhook trigger endpoint"
+        alertMessage:
+          type: ["string", "null"]
+          description: "Optional custom message appended to all alerts (real and test) for this simulation"
 
     CreateRunBody:
       type: object
@@ -668,6 +671,9 @@ components:
         webhookEnabled:
           type: boolean
           description: "Whether the webhook trigger endpoint is active"
+        alertMessage:
+          type: ["string", "null"]
+          description: "Optional custom message appended to all alerts for this simulation"
         lastAlertedAt:
           type: ["string", "null"]
         lastTestAlertAt:

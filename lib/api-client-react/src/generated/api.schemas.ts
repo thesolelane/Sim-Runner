@@ -129,6 +129,11 @@ export interface UpdateSimulationBody {
   alertDestination?: string | null;
   /** Enable or disable the webhook trigger endpoint */
   webhookEnabled?: boolean;
+  /**
+   * Optional custom message appended to all alerts (real and test) for this simulation
+   * @nullable
+   */
+  alertMessage?: string | null;
 }
 
 export interface CreateRunBody {
@@ -159,6 +164,11 @@ export interface Simulation {
   alertDestination: string | null;
   /** Whether the webhook trigger endpoint is active */
   webhookEnabled: boolean;
+  /**
+   * Optional custom message appended to all alerts for this simulation
+   * @nullable
+   */
+  alertMessage?: string | null;
   /** @nullable */
   lastAlertedAt: string | null;
   /**

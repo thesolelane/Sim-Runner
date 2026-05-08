@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -68,6 +69,7 @@ export default function SimulationDetail() {
   const [customCron, setCustomCron] = useState("");
   const [alertThreshold, setAlertThreshold] = useState<number[]>([80]);
   const [alertDestination, setAlertDestination] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
   const [webhookEnabled, setWebhookEnabled] = useState<boolean | null>(null);
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [settingsInitialized, setSettingsInitialized] = useState(false);
@@ -76,6 +78,7 @@ export default function SimulationDetail() {
     if (simulation && !settingsInitialized) {
       setAlertThreshold([simulation.alertThreshold ?? 80]);
       setAlertDestination(simulation.alertDestination ?? "");
+      setAlertMessage(simulation.alertMessage ?? "");
       setSettingsInitialized(true);
     }
   }, [simulation, settingsInitialized]);
@@ -119,6 +122,7 @@ export default function SimulationDetail() {
           schedule,
           alertThreshold: threshold,
           alertDestination: destination,
+          alertMessage: alertMessage.trim() || null,
           webhookEnabled: webhookEnabledValue,
         } as Parameters<typeof updateSimMutation.mutate>[0]["data"],
       },
@@ -458,6 +462,17 @@ export default function SimulationDetail() {
                       : <span className="italic">Never tested</span>
                     }
                   </p>
+                </div>
+                <div>
+                  <Label className="mb-2 block text-sm">Custom message <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Textarea
+                    placeholder="Add a link to your dashboard, mention a team channel, or include any context that makes this alert more actionable..."
+                    value={alertMessage}
+                    onChange={(e) => setAlertMessage(e.target.value)}
+                    className="text-sm resize-none"
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Appended to both real alerts and test alerts.</p>
                 </div>
               </CardContent>
             </Card>
