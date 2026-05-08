@@ -1286,6 +1286,7 @@ router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void>
       res.setHeader("Content-Type", response.headers.get("Content-Type") ?? "video/webm");
       const cl = response.headers.get("Content-Length");
       if (cl) res.setHeader("Content-Length", cl);
+      res.setHeader("Accept-Ranges", "bytes");
       res.setHeader("Cache-Control", "private, max-age=3600");
       Readable.fromWeb(response.body as unknown as NodeWebStream<Uint8Array>).pipe(res);
     } catch {
@@ -1294,19 +1295,41 @@ router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void>
     return;
   }
 
-  // Legacy local file path (fallback for pre-GCS runs)
+  // Legacy local file path (fallback for pre-GCS runs) — supports HTTP range requests
+  // so the browser video player can seek without downloading the entire file first.
   if (!fs.existsSync(run.videoPath)) {
     res.status(410).json({ error: "Video file no longer available" });
     return;
   }
 
   const stat = fs.statSync(run.videoPath);
+  const fileSize = stat.size;
+  const rangeHeader = req.headers.range;
+
   res.setHeader("Content-Type", "video/webm");
-  res.setHeader("Content-Length", stat.size);
+  res.setHeader("Accept-Ranges", "bytes");
   res.setHeader("Cache-Control", "private, max-age=3600");
 
-  const stream = fs.createReadStream(run.videoPath);
-  stream.pipe(res);
+  if (rangeHeader) {
+    const parts = rangeHeader.replace(/bytes=/, "").split("-");
+    const start = parseInt(parts[0], 10);
+    const end = parts[1] ? Math.min(parseInt(parts[1], 10), fileSize - 1) : fileSize - 1;
+
+    if (isNaN(start) || start >= fileSize || start > end) {
+      res.setHeader("Content-Range", `bytes */${fileSize}`);
+      res.status(416).json({ error: "Range Not Satisfiable" });
+      return;
+    }
+
+    const chunkSize = end - start + 1;
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+    res.setHeader("Content-Length", chunkSize);
+    fs.createReadStream(run.videoPath, { start, end }).pipe(res);
+  } else {
+    res.setHeader("Content-Length", fileSize);
+    fs.createReadStream(run.videoPath).pipe(res);
+  }
 });
 
 export default router;
