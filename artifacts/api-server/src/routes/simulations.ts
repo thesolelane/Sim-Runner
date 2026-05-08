@@ -737,6 +737,18 @@ router.post("/simulations/scan", async (req, res): Promise<void> => {
   }
 
   const result = await detectStepsFromUrl(parsed.data.url, parsed.data.appName);
+
+  if (parsed.data.pqcEnabled) {
+    let quantumScanResult = null;
+    try {
+      quantumScanResult = await scanQuantumSecurity(parsed.data.url);
+    } catch (err) {
+      logger.warn({ err, url: parsed.data.url }, "Quantum scan failed during ad-hoc scan");
+    }
+    res.json({ ...result, quantumScanResult });
+    return;
+  }
+
   res.json(result);
 });
 

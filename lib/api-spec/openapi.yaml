@@ -492,6 +492,9 @@ components:
         address:
           type: string
           description: "Wallet or smart contract address for blockchain scans"
+        pqcEnabled:
+          type: boolean
+          description: "When true, run a post-quantum TLS security scan against the URL and include the result in the response"
       required:
         - appName
 
@@ -635,6 +638,11 @@ components:
           description: "Populated for blockchain scans; null for web scans"
           allOf:
             - $ref: "#/components/schemas/BlockchainAccountInfo"
+        quantumScanResult:
+          nullable: true
+          description: "Populated when pqcEnabled is true in the request; null otherwise"
+          allOf:
+            - $ref: "#/components/schemas/QuantumScanResult"
       required:
         - appName
         - url

@@ -35,6 +35,12 @@ export const ScanUrlBody = zod.object({
     .string()
     .optional()
     .describe("Wallet or smart contract address for blockchain scans"),
+  pqcEnabled: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, run a post-quantum TLS security scan against the URL and include the result in the response",
+    ),
 });
 
 export const ScanUrlResponse = zod.object({
@@ -118,6 +124,79 @@ export const ScanUrlResponse = zod.object({
     })
     .nullish()
     .describe("Populated for blockchain scans; null for web scans"),
+  quantumScanResult: zod
+    .object({
+      quantumSafe: zod
+        .boolean()
+        .describe(
+          "True only when a post-quantum hybrid key exchange was detected and no critical findings exist",
+        ),
+      tlsVersion: zod
+        .string()
+        .nullable()
+        .describe("Negotiated TLS protocol version (e.g. TLSv1.3)"),
+      httpVersion: zod
+        .string()
+        .nullable()
+        .describe(
+          "Application-layer protocol detected via ALPN (e.g. HTTP\/2, HTTP\/1.1)",
+        ),
+      keyExchange: zod
+        .string()
+        .nullable()
+        .describe(
+          "Key exchange algorithm detected, including named group for TLS 1.3 (e.g. ECDHE-x25519, X25519Kyber768)",
+        ),
+      cipherSuite: zod
+        .string()
+        .nullable()
+        .describe("Full cipher suite name (e.g. TLS_AES_256_GCM_SHA384)"),
+      certSignatureAlgorithm: zod
+        .string()
+        .nullable()
+        .describe("Certificate signature algorithm (e.g. RSA-SHA256, ML-DSA)"),
+      serverSigAlgs: zod
+        .string()
+        .nullable()
+        .describe(
+          "Comma-separated list of signature algorithms the server advertised support for during the TLS handshake",
+        ),
+      findings: zod
+        .array(
+          zod.object({
+            field: zod
+              .string()
+              .describe(
+                "The TLS attribute being reported (e.g. 'Key Exchange', 'TLS Version')",
+              ),
+            detectedValue: zod
+              .string()
+              .describe("The value detected during the scan"),
+            severity: zod
+              .enum(["info", "warning", "critical"])
+              .describe("Severity of the finding"),
+            explanation: zod
+              .string()
+              .describe(
+                "Plain-English explanation of why this finding matters",
+              ),
+          }),
+        )
+        .describe("List of individual findings with severity and explanation"),
+      scannedAt: zod
+        .string()
+        .describe("ISO 8601 timestamp of when the scan was performed"),
+      error: zod
+        .string()
+        .nullable()
+        .describe(
+          "Error message if the scan failed (e.g. timeout, unreachable host)",
+        ),
+    })
+    .nullish()
+    .describe(
+      "Populated when pqcEnabled is true in the request; null otherwise",
+    ),
 });
 
 /**
