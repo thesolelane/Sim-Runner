@@ -130,6 +130,7 @@ function serializeSimulation(s: typeof simulationsTable.$inferSelect, recentPass
     updatedAt: s.updatedAt.toISOString(),
     lastRunAt: s.lastRunAt ? s.lastRunAt.toISOString() : null,
     lastAlertedAt: s.lastAlertedAt ? s.lastAlertedAt.toISOString() : null,
+    lastTestAlertAt: s.lastTestAlertAt ? s.lastTestAlertAt.toISOString() : null,
     nextRunAt: computeNextRunAt(s.schedule),
     recentPassRate,
   };
@@ -1066,15 +1067,9 @@ router.post("/simulations/:id/test-alert", async (req, res): Promise<void> => {
     return;
   }
 
+  let destinationType: string;
   try {
-    const { destinationType } = await sendTestAlert(destination, simulation.name);
-    req.log.info({ simulationId: id, destinationType }, "Test alert sent");
-    res.json({
-      success: true,
-      message: `Test alert sent successfully via ${destinationType}`,
-      destination,
-      destinationType,
-    });
+    ({ destinationType } = await sendTestAlert(destination, simulation.name));
   } catch (err) {
     const errMessage = err instanceof Error ? err.message : String(err);
     req.log.error({ err, simulationId: id }, "Failed to send test alert");
@@ -1082,7 +1077,25 @@ router.post("/simulations/:id/test-alert", async (req, res): Promise<void> => {
       ? errMessage
       : "Failed to send test alert. Please verify your destination is correct and try again.";
     res.status(500).json({ error: userMessage });
+    return;
   }
+
+  try {
+    await db
+      .update(simulationsTable)
+      .set({ lastTestAlertAt: new Date() })
+      .where(eq(simulationsTable.id, id));
+  } catch (err) {
+    req.log.error({ err, simulationId: id }, "Failed to persist lastTestAlertAt after test alert");
+  }
+
+  req.log.info({ simulationId: id, destinationType }, "Test alert sent");
+  res.json({
+    success: true,
+    message: `Test alert sent successfully via ${destinationType}`,
+    destination,
+    destinationType,
+  });
 });
 
 router.get("/simulations/:id/runs", async (req, res): Promise<void> => {

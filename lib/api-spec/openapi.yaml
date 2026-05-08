@@ -670,6 +670,9 @@ components:
           description: "Whether the webhook trigger endpoint is active"
         lastAlertedAt:
           type: ["string", "null"]
+        lastTestAlertAt:
+          type: ["string", "null"]
+          description: "ISO 8601 datetime of the last test alert sent, or null if never tested"
         nextRunAt:
           type: ["string", "null"]
           description: "ISO 8601 datetime of the next scheduled run, or null if no schedule"
@@ -695,6 +698,7 @@ components:
         - alertDestination
         - webhookEnabled
         - lastAlertedAt
+        - lastTestAlertAt
         - nextRunAt
         - recentPassRate
         - createdAt

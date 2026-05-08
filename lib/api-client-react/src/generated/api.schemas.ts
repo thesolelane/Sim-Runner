@@ -162,6 +162,11 @@ export interface Simulation {
   /** @nullable */
   lastAlertedAt: string | null;
   /**
+   * ISO 8601 datetime of the last test alert sent, or null if never tested
+   * @nullable
+   */
+  lastTestAlertAt: string | null;
+  /**
    * ISO 8601 datetime of the next scheduled run, or null if no schedule
    * @nullable
    */

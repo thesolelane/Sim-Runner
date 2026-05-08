@@ -119,6 +119,12 @@ export const ListSimulationsResponseItem = zod
       .boolean()
       .describe("Whether the webhook trigger endpoint is active"),
     lastAlertedAt: zod.string().nullable(),
+    lastTestAlertAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO 8601 datetime of the last test alert sent, or null if never tested",
+      ),
     nextRunAt: zod
       .string()
       .nullable()
@@ -199,6 +205,12 @@ export const GetSimulationResponse = zod
       .boolean()
       .describe("Whether the webhook trigger endpoint is active"),
     lastAlertedAt: zod.string().nullable(),
+    lastTestAlertAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO 8601 datetime of the last test alert sent, or null if never tested",
+      ),
     nextRunAt: zod
       .string()
       .nullable()
@@ -313,6 +325,12 @@ export const UpdateSimulationResponse = zod
       .boolean()
       .describe("Whether the webhook trigger endpoint is active"),
     lastAlertedAt: zod.string().nullable(),
+    lastTestAlertAt: zod
+      .string()
+      .nullable()
+      .describe(
+        "ISO 8601 datetime of the last test alert sent, or null if never tested",
+      ),
     nextRunAt: zod
       .string()
       .nullable()

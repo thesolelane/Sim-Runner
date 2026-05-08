@@ -144,6 +144,7 @@ export default function SimulationDetail() {
         onSuccess: (data) => {
           setTestAlertStatus("success");
           toast({ title: "Test Alert Sent", description: data.message });
+          queryClient.invalidateQueries({ queryKey: getGetSimulationQueryKey(simId) });
           setTimeout(() => setTestAlertStatus("idle"), 4000);
         },
         onError: (err) => {
@@ -451,6 +452,12 @@ export default function SimulationDetail() {
                   {destHint && (
                     <p className="text-xs text-muted-foreground mt-1">Detected: {destHint}</p>
                   )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {simulation.lastTestAlertAt
+                      ? <>Last tested: <span className="font-medium text-foreground">{format(new Date(simulation.lastTestAlertAt), "MMM d, yyyy 'at' h:mm a")}</span></>
+                      : <span className="italic">Never tested</span>
+                    }
+                  </p>
                 </div>
               </CardContent>
             </Card>
