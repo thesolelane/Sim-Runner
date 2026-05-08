@@ -19,8 +19,22 @@ export const HealthCheckResponse = zod.object({
  * @summary Scan a URL to detect onboarding steps
  */
 export const ScanUrlBody = zod.object({
-  url: zod.string(),
+  url: zod.string().optional(),
   appName: zod.string(),
+  scanType: zod
+    .string()
+    .optional()
+    .describe("Type of scan: 'web' (default) or 'blockchain'"),
+  chainId: zod
+    .string()
+    .optional()
+    .describe(
+      "Chain identifier for blockchain scans (e.g. 'solana', 'ethereum', 'base', 'arbitrum', 'monad')",
+    ),
+  address: zod
+    .string()
+    .optional()
+    .describe("Wallet or smart contract address for blockchain scans"),
 });
 
 export const ScanUrlResponse = zod.object({
@@ -52,6 +66,40 @@ export const ScanUrlResponse = zod.object({
     }),
   ),
   confidence: zod.string(),
+  blockchainResult: zod
+    .object({
+      chain: zod
+        .string()
+        .describe("Chain identifier (e.g. 'solana', 'ethereum')"),
+      chainName: zod.string().describe("Human-readable chain name"),
+      address: zod.string(),
+      accountType: zod.enum(["contract", "wallet", "unknown"]),
+      balance: zod
+        .string()
+        .nullable()
+        .describe("Formatted native token balance"),
+      balanceRaw: zod.string().nullable().describe("Raw balance value"),
+      isActive: zod.boolean(),
+      dataSize: zod
+        .number()
+        .nullable()
+        .describe("Bytecode size in bytes (contracts only)"),
+      executable: zod
+        .boolean()
+        .nullable()
+        .describe("Whether the account is executable (Solana)"),
+      owner: zod.string().nullable().describe("Program owner (Solana)"),
+      explorerUrl: zod.string().describe("Block explorer URL for this address"),
+      quantumRoadmap: zod.object({
+        status: zod.string(),
+        details: zod.string(),
+        reference: zod.string().nullable(),
+      }),
+      scannedAt: zod.string(),
+      error: zod.string().nullable(),
+    })
+    .nullish()
+    .describe("Populated for blockchain scans; null for web scans"),
 });
 
 /**
@@ -140,6 +188,44 @@ export const GetSimulationStatsResponse = zod.object({
         .describe(
           "Post-quantum TLS security scan result, or null for older runs",
         ),
+      blockchainScanResult: zod
+        .object({
+          chain: zod
+            .string()
+            .describe("Chain identifier (e.g. 'solana', 'ethereum')"),
+          chainName: zod.string().describe("Human-readable chain name"),
+          address: zod.string(),
+          accountType: zod.enum(["contract", "wallet", "unknown"]),
+          balance: zod
+            .string()
+            .nullable()
+            .describe("Formatted native token balance"),
+          balanceRaw: zod.string().nullable().describe("Raw balance value"),
+          isActive: zod.boolean(),
+          dataSize: zod
+            .number()
+            .nullable()
+            .describe("Bytecode size in bytes (contracts only)"),
+          executable: zod
+            .boolean()
+            .nullable()
+            .describe("Whether the account is executable (Solana)"),
+          owner: zod.string().nullable().describe("Program owner (Solana)"),
+          explorerUrl: zod
+            .string()
+            .describe("Block explorer URL for this address"),
+          quantumRoadmap: zod.object({
+            status: zod.string(),
+            details: zod.string(),
+            reference: zod.string().nullable(),
+          }),
+          scannedAt: zod.string(),
+          error: zod.string().nullable(),
+        })
+        .nullish()
+        .describe(
+          "Blockchain account info for blockchain simulation runs, or null otherwise",
+        ),
     }),
   ),
 });
@@ -194,6 +280,14 @@ export const ListSimulationsResponseItem = zod
       .describe(
         "Whether post-quantum TLS security scanning is enabled for each run",
       ),
+    scanType: zod
+      .string()
+      .describe("Type of simulation: 'web' or 'blockchain'"),
+    chainId: zod.string().nullable().describe("Blockchain chain identifier"),
+    targetAddress: zod
+      .string()
+      .nullable()
+      .describe("Wallet or smart contract address"),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -246,6 +340,22 @@ export const CreateSimulationBody = zod.object({
     .boolean()
     .optional()
     .describe("Enable post-quantum TLS security scanning on each run"),
+  scanType: zod
+    .string()
+    .optional()
+    .describe("Type of simulation: 'web' (default) or 'blockchain'"),
+  chainId: zod
+    .string()
+    .optional()
+    .describe(
+      "Blockchain chain identifier (required when scanType is 'blockchain')",
+    ),
+  targetAddress: zod
+    .string()
+    .optional()
+    .describe(
+      "Wallet or smart contract address (required when scanType is 'blockchain')",
+    ),
 });
 
 /**
@@ -295,6 +405,14 @@ export const GetSimulationResponse = zod
       .describe(
         "Whether post-quantum TLS security scanning is enabled for each run",
       ),
+    scanType: zod
+      .string()
+      .describe("Type of simulation: 'web' or 'blockchain'"),
+    chainId: zod.string().nullable().describe("Blockchain chain identifier"),
+    targetAddress: zod
+      .string()
+      .nullable()
+      .describe("Wallet or smart contract address"),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -438,6 +556,14 @@ export const UpdateSimulationResponse = zod
       .describe(
         "Whether post-quantum TLS security scanning is enabled for each run",
       ),
+    scanType: zod
+      .string()
+      .describe("Type of simulation: 'web' or 'blockchain'"),
+    chainId: zod.string().nullable().describe("Blockchain chain identifier"),
+    targetAddress: zod
+      .string()
+      .nullable()
+      .describe("Wallet or smart contract address"),
     lastAlertedAt: zod.string().nullable(),
     lastTestAlertAt: zod
       .string()
@@ -572,6 +698,42 @@ export const ListRunsResponseItem = zod.object({
     })
     .nullish()
     .describe("Post-quantum TLS security scan result, or null for older runs"),
+  blockchainScanResult: zod
+    .object({
+      chain: zod
+        .string()
+        .describe("Chain identifier (e.g. 'solana', 'ethereum')"),
+      chainName: zod.string().describe("Human-readable chain name"),
+      address: zod.string(),
+      accountType: zod.enum(["contract", "wallet", "unknown"]),
+      balance: zod
+        .string()
+        .nullable()
+        .describe("Formatted native token balance"),
+      balanceRaw: zod.string().nullable().describe("Raw balance value"),
+      isActive: zod.boolean(),
+      dataSize: zod
+        .number()
+        .nullable()
+        .describe("Bytecode size in bytes (contracts only)"),
+      executable: zod
+        .boolean()
+        .nullable()
+        .describe("Whether the account is executable (Solana)"),
+      owner: zod.string().nullable().describe("Program owner (Solana)"),
+      explorerUrl: zod.string().describe("Block explorer URL for this address"),
+      quantumRoadmap: zod.object({
+        status: zod.string(),
+        details: zod.string(),
+        reference: zod.string().nullable(),
+      }),
+      scannedAt: zod.string(),
+      error: zod.string().nullable(),
+    })
+    .nullish()
+    .describe(
+      "Blockchain account info for blockchain simulation runs, or null otherwise",
+    ),
 });
 export const ListRunsResponse = zod.array(ListRunsResponseItem);
 
@@ -703,6 +865,47 @@ export const GetRunResponse = zod.object({
     ])
     .optional()
     .describe("Post-quantum TLS security scan result, or null for older runs"),
+  blockchainScanResult: zod
+    .union([
+      zod.object({
+        chain: zod
+          .string()
+          .describe("Chain identifier (e.g. 'solana', 'ethereum')"),
+        chainName: zod.string().describe("Human-readable chain name"),
+        address: zod.string(),
+        accountType: zod.enum(["contract", "wallet", "unknown"]),
+        balance: zod
+          .string()
+          .nullable()
+          .describe("Formatted native token balance"),
+        balanceRaw: zod.string().nullable().describe("Raw balance value"),
+        isActive: zod.boolean(),
+        dataSize: zod
+          .number()
+          .nullable()
+          .describe("Bytecode size in bytes (contracts only)"),
+        executable: zod
+          .boolean()
+          .nullable()
+          .describe("Whether the account is executable (Solana)"),
+        owner: zod.string().nullable().describe("Program owner (Solana)"),
+        explorerUrl: zod
+          .string()
+          .describe("Block explorer URL for this address"),
+        quantumRoadmap: zod.object({
+          status: zod.string(),
+          details: zod.string(),
+          reference: zod.string().nullable(),
+        }),
+        scannedAt: zod.string(),
+        error: zod.string().nullable(),
+      }),
+      zod.null(),
+    ])
+    .optional()
+    .describe(
+      "Blockchain account info for blockchain simulation runs, or null otherwise",
+    ),
 });
 
 /**

@@ -483,8 +483,16 @@ components:
           type: string
         appName:
           type: string
+        scanType:
+          type: string
+          description: "Type of scan: 'web' (default) or 'blockchain'"
+        chainId:
+          type: string
+          description: "Chain identifier for blockchain scans (e.g. 'solana', 'ethereum', 'base', 'arbitrum', 'monad')"
+        address:
+          type: string
+          description: "Wallet or smart contract address for blockchain scans"
       required:
-        - url
         - appName
 
     DetectedStep:
@@ -527,6 +535,76 @@ components:
         - candidateSelectors
         - actionType
 
+    BlockchainQuantumRoadmap:
+      type: object
+      properties:
+        status:
+          type: string
+        details:
+          type: string
+        reference:
+          type: ["string", "null"]
+      required:
+        - status
+        - details
+        - reference
+
+    BlockchainAccountInfo:
+      type: object
+      properties:
+        chain:
+          type: string
+          description: "Chain identifier (e.g. 'solana', 'ethereum')"
+        chainName:
+          type: string
+          description: "Human-readable chain name"
+        address:
+          type: string
+        accountType:
+          type: string
+          enum: [contract, wallet, unknown]
+        balance:
+          type: ["string", "null"]
+          description: "Formatted native token balance"
+        balanceRaw:
+          type: ["string", "null"]
+          description: "Raw balance value"
+        isActive:
+          type: boolean
+        dataSize:
+          type: ["integer", "null"]
+          description: "Bytecode size in bytes (contracts only)"
+        executable:
+          type: ["boolean", "null"]
+          description: "Whether the account is executable (Solana)"
+        owner:
+          type: ["string", "null"]
+          description: "Program owner (Solana)"
+        explorerUrl:
+          type: string
+          description: "Block explorer URL for this address"
+        quantumRoadmap:
+          $ref: "#/components/schemas/BlockchainQuantumRoadmap"
+        scannedAt:
+          type: string
+        error:
+          type: ["string", "null"]
+      required:
+        - chain
+        - chainName
+        - address
+        - accountType
+        - balance
+        - balanceRaw
+        - isActive
+        - dataSize
+        - executable
+        - owner
+        - explorerUrl
+        - quantumRoadmap
+        - scannedAt
+        - error
+
     ScanResult:
       type: object
       properties:
@@ -540,6 +618,11 @@ components:
             $ref: "#/components/schemas/DetectedStep"
         confidence:
           type: string
+        blockchainResult:
+          nullable: true
+          description: "Populated for blockchain scans; null for web scans"
+          allOf:
+            - $ref: "#/components/schemas/BlockchainAccountInfo"
       required:
         - appName
         - url
@@ -596,6 +679,15 @@ components:
         pqcEnabled:
           type: boolean
           description: "Enable post-quantum TLS security scanning on each run"
+        scanType:
+          type: string
+          description: "Type of simulation: 'web' (default) or 'blockchain'"
+        chainId:
+          type: string
+          description: "Blockchain chain identifier (required when scanType is 'blockchain')"
+        targetAddress:
+          type: string
+          description: "Wallet or smart contract address (required when scanType is 'blockchain')"
       required:
         - name
         - appName
@@ -683,6 +775,15 @@ components:
         pqcEnabled:
           type: boolean
           description: "Whether post-quantum TLS security scanning is enabled for each run"
+        scanType:
+          type: string
+          description: "Type of simulation: 'web' or 'blockchain'"
+        chainId:
+          type: ["string", "null"]
+          description: "Blockchain chain identifier"
+        targetAddress:
+          type: ["string", "null"]
+          description: "Wallet or smart contract address"
         lastAlertedAt:
           type: ["string", "null"]
         lastTestAlertAt:
@@ -717,6 +818,9 @@ components:
         - nextRunAt
         - recentPassRate
         - pqcEnabled
+        - scanType
+        - chainId
+        - targetAddress
         - createdAt
         - updatedAt
 
@@ -795,6 +899,11 @@ components:
           description: "Post-quantum TLS security scan result, or null for older runs"
           allOf:
             - $ref: "#/components/schemas/QuantumScanResult"
+        blockchainScanResult:
+          nullable: true
+          description: "Blockchain account info for blockchain simulation runs, or null otherwise"
+          allOf:
+            - $ref: "#/components/schemas/BlockchainAccountInfo"
       required:
         - id
         - simulationId
@@ -906,6 +1015,11 @@ components:
             - $ref: "#/components/schemas/QuantumScanResult"
             - type: "null"
           description: "Post-quantum TLS security scan result, or null for older runs"
+        blockchainScanResult:
+          oneOf:
+            - $ref: "#/components/schemas/BlockchainAccountInfo"
+            - type: "null"
+          description: "Blockchain account info for blockchain simulation runs, or null otherwise"
       required:
         - id
         - simulationId

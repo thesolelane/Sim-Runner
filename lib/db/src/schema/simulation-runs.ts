@@ -27,6 +27,26 @@ export const simulationRunsTable = pgTable("simulation_runs", {
     selectorUsed: string | null;
     actionTaken: string | null;
   }>>(),
+  blockchainScanResult: jsonb("blockchain_scan_result").$type<{
+    chain: string;
+    chainName: string;
+    address: string;
+    accountType: "contract" | "wallet" | "unknown";
+    balance: string | null;
+    balanceRaw: string | null;
+    isActive: boolean;
+    dataSize: number | null;
+    executable: boolean | null;
+    owner: string | null;
+    explorerUrl: string;
+    quantumRoadmap: {
+      status: string;
+      details: string;
+      reference: string | null;
+    };
+    scannedAt: string;
+    error: string | null;
+  }>(),
   quantumScanResult: jsonb("quantum_scan_result").$type<{
     quantumSafe: boolean;
     tlsVersion: string | null;

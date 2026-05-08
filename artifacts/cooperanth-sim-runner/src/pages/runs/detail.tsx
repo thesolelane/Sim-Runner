@@ -6,6 +6,7 @@ import {
   getGetRunQueryKey,
   getGetSimulationQueryKey,
   type QuantumScanResult,
+  type BlockchainAccountInfo,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,8 @@ import {
   ShieldAlert,
   ShieldX,
   Info,
+  Wallet,
+  ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -292,6 +295,108 @@ function QuantumSecurityCard({
   );
 }
 
+function BlockchainInfoCard({ info }: { info: BlockchainAccountInfo }) {
+  const accountTypeLabel =
+    info.accountType === "contract"
+      ? "Smart Contract"
+      : info.accountType === "wallet"
+      ? "Wallet"
+      : "Unknown";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Wallet className="h-5 w-5 text-primary" />
+          On-Chain Account Snapshot
+        </CardTitle>
+        <CardDescription>
+          Live data fetched from {info.chainName} at the time of this run.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {info.error && (
+          <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2.5">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>RPC error: {info.error}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Chain</div>
+            <div className="font-semibold">{info.chainName}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Account Type</div>
+            <Badge
+              variant="outline"
+              className={
+                info.accountType === "contract"
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : info.accountType === "wallet"
+                  ? "border-green-200 bg-green-50 text-green-700"
+                  : "border-muted"
+              }
+            >
+              {accountTypeLabel}
+            </Badge>
+          </div>
+          <div className="col-span-2">
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Address</div>
+            <div className="font-mono text-xs break-all bg-muted px-3 py-2 rounded">{info.address}</div>
+          </div>
+          {info.balance && (
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Balance</div>
+              <div className="font-mono text-sm">{info.balance}</div>
+            </div>
+          )}
+          {info.dataSize !== null && (
+            <div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Bytecode Size</div>
+              <div className="font-mono text-sm">{info.dataSize.toLocaleString()} bytes</div>
+            </div>
+          )}
+          {info.owner && (
+            <div className="col-span-2">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Owner Program</div>
+              <div className="font-mono text-xs break-all bg-muted px-2 py-1 rounded">{info.owner}</div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-md border p-3 bg-muted/30">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+            Quantum Readiness — {info.quantumRoadmap.status}
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">{info.quantumRoadmap.details}</p>
+          {info.quantumRoadmap.reference && (
+            <a
+              href={info.quantumRoadmap.reference}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+            >
+              Learn more <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+
+        <a
+          href={info.explorerUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          View on block explorer
+        </a>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function RunDetail() {
   const { id, runId } = useParams<{ id: string; runId: string }>();
   const simId = parseInt(id || "0", 10);
@@ -430,6 +535,11 @@ export default function RunDetail() {
         </Card>
       )}
 
+      {run.blockchainScanResult && (
+        <BlockchainInfoCard info={run.blockchainScanResult as BlockchainAccountInfo} />
+      )}
+
+      {!run.blockchainScanResult && (
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Step Breakdown</CardTitle>
@@ -545,6 +655,7 @@ export default function RunDetail() {
           })}
         </CardContent>
       </Card>
+      )}
 
       <QuantumSecurityCard result={quantumScanResult} pqcEnabled={simulation?.pqcEnabled} />
     </div>

@@ -86,12 +86,19 @@ export default function SimulationsPage() {
                         </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm text-muted-foreground">{sim.appName}</span>
-                          <a href={sim.appUrl} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
+                        {sim.scanType === "blockchain" ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-muted-foreground">{sim.chainId}</span>
+                            <span className="font-mono text-xs text-foreground max-w-[180px] truncate">{sim.targetAddress}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-muted-foreground">{sim.appName}</span>
+                            <a href={sim.appUrl} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">{sim.steps.length}</td>
                       <td className="px-4 py-3 text-sm">{sim.totalRuns}</td>

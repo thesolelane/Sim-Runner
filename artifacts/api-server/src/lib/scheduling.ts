@@ -4,6 +4,7 @@ import { and, eq, isNotNull, lt, sql } from "drizzle-orm";
 import { runSimulation } from "./engine";
 import { checkAndSendAlert } from "./alerting";
 import { scanQuantumSecurity } from "./quantum-scanner";
+import { scanBlockchainAddress, type ChainId } from "./blockchain-scanner";
 import { ObjectStorageService } from "./objectStorage";
 import { logger } from "./logger";
 
@@ -42,6 +43,8 @@ async function executeScheduledRun(simulationId: number): Promise<void> {
   }>;
 
   const runStart = Date.now();
+  const isBlockchainSim = simulation.scanType === "blockchain";
+
   let stepResults: Array<{
     stepOrder: number;
     stepName: string;
@@ -52,62 +55,77 @@ async function executeScheduledRun(simulationId: number): Promise<void> {
     screenshot: string | null;
     selectorUsed: string | null;
     actionTaken: string | null;
-  }>;
+  }> = [];
   let videoPath: string | null = null;
-
-  try {
-    const runResult = await runSimulation(simulation.appUrl, steps, {
-      headedMode: false,
-      timeoutMs: 15000,
-    });
-    stepResults = runResult.stepResults;
-    videoPath = runResult.videoPath;
-  } catch (err) {
-    logger.error({ err, simulationId }, "Scheduled engine run failed");
-    stepResults = steps.map((step) => ({
-      stepOrder: step.order,
-      stepName: step.name,
-      status: "failed",
-      durationMs: 0,
-      generatedData: {},
-      errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
-      screenshot: null,
-      selectorUsed: null,
-      actionTaken: null,
-    }));
-  }
-
+  let blockchainScanResult = null;
   let quantumScanResult = null;
-  if (simulation.pqcEnabled) {
+
+  if (isBlockchainSim) {
+    blockchainScanResult = await scanBlockchainAddress(
+      simulation.chainId as ChainId,
+      simulation.targetAddress!,
+    );
+    logger.info(
+      { simulationId, accountType: blockchainScanResult.accountType, error: blockchainScanResult.error },
+      "Blockchain scan complete (scheduled run)",
+    );
+  } else {
     try {
-      quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
-      logger.info(
-        { simulationId, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
-        "Quantum scan complete (scheduled run)",
-      );
+      const runResult = await runSimulation(simulation.appUrl, steps, {
+        headedMode: false,
+        timeoutMs: 15000,
+      });
+      stepResults = runResult.stepResults;
+      videoPath = runResult.videoPath;
     } catch (err) {
-      logger.warn({ err, simulationId }, "Quantum scan failed — scheduled run unaffected");
+      logger.error({ err, simulationId }, "Scheduled engine run failed");
+      stepResults = steps.map((step) => ({
+        stepOrder: step.order,
+        stepName: step.name,
+        status: "failed",
+        durationMs: 0,
+        generatedData: {},
+        errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
+        screenshot: null,
+        selectorUsed: null,
+        actionTaken: null,
+      }));
+    }
+
+    if (simulation.pqcEnabled) {
+      try {
+        quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+        logger.info(
+          { simulationId, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+          "Quantum scan complete (scheduled run)",
+        );
+      } catch (err) {
+        logger.warn({ err, simulationId }, "Quantum scan failed — scheduled run unaffected");
+      }
     }
   }
 
   const passedSteps = stepResults.filter((s) => s.status === "passed").length;
   const failedSteps = stepResults.filter((s) => s.status === "failed").length;
   const totalDuration = Date.now() - runStart;
-  const overallStatus = failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial";
+  const overallStatus = isBlockchainSim
+    ? (blockchainScanResult?.error ? "failed" : "passed")
+    : (failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial");
 
   await db
     .insert(simulationRunsTable)
     .values({
       simulationId,
       status: overallStatus,
-      totalSteps: steps.length,
-      passedSteps,
-      failedSteps,
+      totalSteps: isBlockchainSim ? 0 : steps.length,
+      passedSteps: isBlockchainSim ? 0 : passedSteps,
+      failedSteps: isBlockchainSim ? 0 : failedSteps,
       durationMs: totalDuration,
       headedMode: false,
       videoPath,
-      stepResults,
+      stepResults: isBlockchainSim ? [] : stepResults,
       quantumScanResult,
+      blockchainScanResult,
       completedAt: new Date(),
     });
 
@@ -120,7 +138,9 @@ async function executeScheduledRun(simulationId: number): Promise<void> {
     })
     .where(eq(simulationsTable.id, simulationId));
 
-  const passRate = steps.length > 0 ? passedSteps / steps.length : 0;
+  const passRate = isBlockchainSim
+    ? (blockchainScanResult?.error ? 0 : 1)
+    : (steps.length > 0 ? passedSteps / steps.length : 0);
   await checkAndSendAlert(simulationId, simulation.name, passRate);
 
   logger.info({ simulationId, overallStatus, passedSteps, failedSteps }, "Scheduled run complete");

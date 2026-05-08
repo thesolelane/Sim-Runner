@@ -21,6 +21,7 @@ import { registerSchedule, unregisterSchedule } from "../lib/scheduling";
 import { checkAndSendAlert, sendTestAlert } from "../lib/alerting";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { scanQuantumSecurity } from "../lib/quantum-scanner";
+import { scanBlockchainAddress, type ChainId } from "../lib/blockchain-scanner";
 import { logger } from "../lib/logger";
 import { randomUUID } from "crypto";
 
@@ -702,6 +703,28 @@ router.post("/simulations/scan", async (req, res): Promise<void> => {
     return;
   }
 
+  if (parsed.data.scanType === "blockchain") {
+    const { chainId, address } = parsed.data;
+    if (!chainId || !address) {
+      res.status(400).json({ error: "chainId and address are required for blockchain scans" });
+      return;
+    }
+    const blockchainResult = await scanBlockchainAddress(chainId as ChainId, address);
+    res.json({
+      appName: parsed.data.appName,
+      url: address,
+      detectedSteps: [],
+      confidence: "high",
+      blockchainResult,
+    });
+    return;
+  }
+
+  if (!parsed.data.url) {
+    res.status(400).json({ error: "url is required for web scans" });
+    return;
+  }
+
   const urlError = validateScanUrl(parsed.data.url);
   if (urlError) {
     res.status(400).json({ error: urlError });
@@ -797,6 +820,8 @@ router.post("/simulations/webhook/:token", async (req, res): Promise<void> => {
 
   setImmediate(async () => {
     const runStart = Date.now();
+    const isBlockchainWebhook = simulation.scanType === "blockchain";
+
     let stepResults: Array<{
       stepOrder: number;
       stepName: string;
@@ -807,60 +832,72 @@ router.post("/simulations/webhook/:token", async (req, res): Promise<void> => {
       screenshot: string | null;
       selectorUsed: string | null;
       actionTaken: string | null;
-    }>;
+    }> = [];
     let videoPath: string | null = null;
-
-    try {
-      const runResult = await runSimulation(simulation.appUrl, steps, {
-        headedMode: false,
-        timeoutMs: 15000,
-      });
-      stepResults = runResult.stepResults;
-      if (runResult.videoPath) {
-        videoPath = await uploadVideoToStorage(runResult.videoPath);
-      }
-    } catch (err) {
-      stepResults = steps.map((step) => ({
-        stepOrder: step.order,
-        stepName: step.name,
-        status: "failed",
-        durationMs: 0,
-        generatedData: {},
-        errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
-        screenshot: null,
-        selectorUsed: null,
-        actionTaken: null,
-      }));
-    }
-
+    let blockchainScanResult = null;
     let quantumScanResult = null;
-    if (simulation.pqcEnabled) {
+
+    if (isBlockchainWebhook) {
+      blockchainScanResult = await scanBlockchainAddress(
+        simulation.chainId as ChainId,
+        simulation.targetAddress!,
+      );
+    } else {
       try {
-        quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
-        logger.info(
-          { simulationId: simulation.id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
-          "Quantum scan complete (webhook run)",
-        );
+        const runResult = await runSimulation(simulation.appUrl, steps, {
+          headedMode: false,
+          timeoutMs: 15000,
+        });
+        stepResults = runResult.stepResults;
+        if (runResult.videoPath) {
+          videoPath = await uploadVideoToStorage(runResult.videoPath);
+        }
       } catch (err) {
-        logger.warn({ err, simulationId: simulation.id }, "Quantum scan failed — webhook run unaffected");
+        stepResults = steps.map((step) => ({
+          stepOrder: step.order,
+          stepName: step.name,
+          status: "failed",
+          durationMs: 0,
+          generatedData: {},
+          errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
+          screenshot: null,
+          selectorUsed: null,
+          actionTaken: null,
+        }));
+      }
+
+      if (simulation.pqcEnabled) {
+        try {
+          quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+          logger.info(
+            { simulationId: simulation.id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+            "Quantum scan complete (webhook run)",
+          );
+        } catch (err) {
+          logger.warn({ err, simulationId: simulation.id }, "Quantum scan failed — webhook run unaffected");
+        }
       }
     }
 
     const passedSteps = stepResults.filter((s) => s.status === "passed").length;
     const failedSteps = stepResults.filter((s) => s.status === "failed").length;
     const totalDuration = Date.now() - runStart;
-    const overallStatus = failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial";
+    const overallStatus = isBlockchainWebhook
+      ? (blockchainScanResult?.error ? "failed" : "passed")
+      : (failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial");
 
     await db
       .update(simulationRunsTable)
       .set({
         status: overallStatus,
-        passedSteps,
-        failedSteps,
+        passedSteps: isBlockchainWebhook ? 0 : passedSteps,
+        failedSteps: isBlockchainWebhook ? 0 : failedSteps,
+        totalSteps: isBlockchainWebhook ? 0 : steps.length,
         durationMs: totalDuration,
         videoPath,
-        stepResults,
+        stepResults: isBlockchainWebhook ? [] : stepResults,
         quantumScanResult,
+        blockchainScanResult,
         completedAt: new Date(),
       })
       .where(eq(simulationRunsTable.id, run.id));
@@ -874,7 +911,9 @@ router.post("/simulations/webhook/:token", async (req, res): Promise<void> => {
       })
       .where(eq(simulationsTable.id, simulation.id));
 
-    const passRate = steps.length > 0 ? passedSteps / steps.length : 0;
+    const passRate = isBlockchainWebhook
+      ? (blockchainScanResult?.error ? 0 : 1)
+      : (steps.length > 0 ? passedSteps / steps.length : 0);
     await checkAndSendAlert(simulation.id, simulation.name, passRate);
 
     logger.info({ simulationId: simulation.id, runId: run.id, overallStatus }, "Webhook-triggered run complete");
@@ -898,9 +937,18 @@ router.post("/simulations", async (req, res): Promise<void> => {
     return;
   }
 
-  const urlError = validateScanUrl(parsed.data.appUrl);
-  if (urlError) {
-    res.status(400).json({ error: urlError });
+  const isBlockchain = parsed.data.scanType === "blockchain";
+
+  if (!isBlockchain) {
+    const urlError = validateScanUrl(parsed.data.appUrl);
+    if (urlError) {
+      res.status(400).json({ error: urlError });
+      return;
+    }
+  }
+
+  if (isBlockchain && (!parsed.data.chainId || !parsed.data.targetAddress)) {
+    res.status(400).json({ error: "chainId and targetAddress are required for blockchain simulations" });
     return;
   }
 
@@ -913,6 +961,9 @@ router.post("/simulations", async (req, res): Promise<void> => {
       appType: parsed.data.appType,
       steps: parsed.data.steps,
       pqcEnabled: parsed.data.pqcEnabled ?? false,
+      scanType: parsed.data.scanType ?? "web",
+      chainId: parsed.data.chainId ?? null,
+      targetAddress: parsed.data.targetAddress ?? null,
       webhookToken: randomUUID(),
     })
     .returning();
@@ -1173,13 +1224,15 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
 
   const runStart = Date.now();
 
-  const runUrlError = validateScanUrl(simulation.appUrl);
-  if (runUrlError) {
-    res.status(400).json({ error: `Cannot run simulation: ${runUrlError}` });
-    return;
-  }
+  const isBlockchain = simulation.scanType === "blockchain";
 
-  logger.info({ simulationId: id, steps: steps.length, headedMode }, "Starting Playwright run");
+  if (!isBlockchain) {
+    const runUrlError = validateScanUrl(simulation.appUrl);
+    if (runUrlError) {
+      res.status(400).json({ error: `Cannot run simulation: ${runUrlError}` });
+      return;
+    }
+  }
 
   let stepResults: Array<{
     stepOrder: number;
@@ -1191,64 +1244,78 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     screenshot: string | null;
     selectorUsed: string | null;
     actionTaken: string | null;
-  }>;
+  }> = [];
   let videoPath: string | null = null;
-
-  try {
-    const runResult = await runSimulation(simulation.appUrl, steps, {
-      headedMode,
-      timeoutMs: 15000,
-    });
-    stepResults = runResult.stepResults;
-    if (runResult.videoPath) {
-      videoPath = await uploadVideoToStorage(runResult.videoPath);
-    }
-  } catch (err) {
-    logger.error({ err, simulationId: id }, "Engine run failed");
-    stepResults = steps.map((step) => ({
-      stepOrder: step.order,
-      stepName: step.name,
-      status: "failed",
-      durationMs: 0,
-      generatedData: {},
-      errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
-      screenshot: null,
-      selectorUsed: null,
-      actionTaken: null,
-    }));
-  }
-
+  let blockchainScanResult = null;
   let quantumScanResult = null;
-  if (simulation.pqcEnabled) {
+
+  if (isBlockchain) {
+    logger.info({ simulationId: id, chainId: simulation.chainId, address: simulation.targetAddress }, "Starting blockchain scan");
+    blockchainScanResult = await scanBlockchainAddress(
+      simulation.chainId as ChainId,
+      simulation.targetAddress!,
+    );
+    logger.info({ simulationId: id, accountType: blockchainScanResult.accountType, isActive: blockchainScanResult.isActive }, "Blockchain scan complete");
+  } else {
+    logger.info({ simulationId: id, steps: steps.length, headedMode }, "Starting Playwright run");
     try {
-      quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
-      logger.info(
-        { simulationId: id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
-        "Quantum scan complete",
-      );
+      const runResult = await runSimulation(simulation.appUrl, steps, {
+        headedMode,
+        timeoutMs: 15000,
+      });
+      stepResults = runResult.stepResults;
+      if (runResult.videoPath) {
+        videoPath = await uploadVideoToStorage(runResult.videoPath);
+      }
     } catch (err) {
-      logger.warn({ err, simulationId: id }, "Quantum scan failed — run result unaffected");
+      logger.error({ err, simulationId: id }, "Engine run failed");
+      stepResults = steps.map((step) => ({
+        stepOrder: step.order,
+        stepName: step.name,
+        status: "failed",
+        durationMs: 0,
+        generatedData: {},
+        errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
+        screenshot: null,
+        selectorUsed: null,
+        actionTaken: null,
+      }));
+    }
+
+    if (simulation.pqcEnabled) {
+      try {
+        quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
+        logger.info(
+          { simulationId: id, quantumSafe: quantumScanResult.quantumSafe, findings: quantumScanResult.findings.length },
+          "Quantum scan complete",
+        );
+      } catch (err) {
+        logger.warn({ err, simulationId: id }, "Quantum scan failed — run result unaffected");
+      }
     }
   }
 
   const passedSteps = stepResults.filter((s) => s.status === "passed").length;
   const failedSteps = stepResults.filter((s) => s.status === "failed").length;
   const totalDuration = Date.now() - runStart;
-  const overallStatus = failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial";
+  const overallStatus = isBlockchain
+    ? (blockchainScanResult?.error ? "failed" : "passed")
+    : (failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial");
 
   const [run] = await db
     .insert(simulationRunsTable)
     .values({
       simulationId: id,
       status: overallStatus,
-      totalSteps: steps.length,
-      passedSteps,
-      failedSteps,
+      totalSteps: isBlockchain ? 0 : steps.length,
+      passedSteps: isBlockchain ? 0 : passedSteps,
+      failedSteps: isBlockchain ? 0 : failedSteps,
       durationMs: totalDuration,
       headedMode,
       videoPath,
-      stepResults,
+      stepResults: isBlockchain ? [] : stepResults,
       quantumScanResult,
+      blockchainScanResult,
       completedAt: new Date(),
     })
     .returning();
@@ -1262,7 +1329,9 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
     })
     .where(eq(simulationsTable.id, id));
 
-  const passRate = steps.length > 0 ? passedSteps / steps.length : 0;
+  const passRate = isBlockchain
+    ? (blockchainScanResult?.error ? 0 : 1)
+    : (steps.length > 0 ? passedSteps / steps.length : 0);
   await checkAndSendAlert(id, simulation.name, passRate);
 
   logger.info(

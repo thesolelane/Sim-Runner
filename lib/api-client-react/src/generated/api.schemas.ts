@@ -59,8 +59,14 @@ export interface WebhookTriggerResponse {
 }
 
 export interface ScanUrlBody {
-  url: string;
+  url?: string;
   appName: string;
+  /** Type of scan: 'web' (default) or 'blockchain' */
+  scanType?: string;
+  /** Chain identifier for blockchain scans (e.g. 'solana', 'ethereum', 'base', 'arbitrum', 'monad') */
+  chainId?: string;
+  /** Wallet or smart contract address for blockchain scans */
+  address?: string;
 }
 
 export interface DetectedStep {
@@ -79,11 +85,70 @@ export interface DetectedStep {
   actionType: string;
 }
 
+export interface BlockchainQuantumRoadmap {
+  status: string;
+  details: string;
+  /** @nullable */
+  reference: string | null;
+}
+
+export type BlockchainAccountInfoAccountType =
+  (typeof BlockchainAccountInfoAccountType)[keyof typeof BlockchainAccountInfoAccountType];
+
+export const BlockchainAccountInfoAccountType = {
+  contract: "contract",
+  wallet: "wallet",
+  unknown: "unknown",
+} as const;
+
+export interface BlockchainAccountInfo {
+  /** Chain identifier (e.g. 'solana', 'ethereum') */
+  chain: string;
+  /** Human-readable chain name */
+  chainName: string;
+  address: string;
+  accountType: BlockchainAccountInfoAccountType;
+  /**
+   * Formatted native token balance
+   * @nullable
+   */
+  balance: string | null;
+  /**
+   * Raw balance value
+   * @nullable
+   */
+  balanceRaw: string | null;
+  isActive: boolean;
+  /**
+   * Bytecode size in bytes (contracts only)
+   * @nullable
+   */
+  dataSize: number | null;
+  /**
+   * Whether the account is executable (Solana)
+   * @nullable
+   */
+  executable: boolean | null;
+  /**
+   * Program owner (Solana)
+   * @nullable
+   */
+  owner: string | null;
+  /** Block explorer URL for this address */
+  explorerUrl: string;
+  quantumRoadmap: BlockchainQuantumRoadmap;
+  scannedAt: string;
+  /** @nullable */
+  error: string | null;
+}
+
 export interface ScanResult {
   appName: string;
   url: string;
   detectedSteps: DetectedStep[];
   confidence: string;
+  /** Populated for blockchain scans; null for web scans */
+  blockchainResult?: BlockchainAccountInfo | null;
 }
 
 export interface FlowStep {
@@ -106,6 +171,12 @@ export interface CreateSimulationBody {
   steps: FlowStep[];
   /** Enable post-quantum TLS security scanning on each run */
   pqcEnabled?: boolean;
+  /** Type of simulation: 'web' (default) or 'blockchain' */
+  scanType?: string;
+  /** Blockchain chain identifier (required when scanType is 'blockchain') */
+  chainId?: string;
+  /** Wallet or smart contract address (required when scanType is 'blockchain') */
+  targetAddress?: string;
 }
 
 export interface UpdateSimulationBody {
@@ -175,6 +246,18 @@ export interface Simulation {
   alertMessage?: string | null;
   /** Whether post-quantum TLS security scanning is enabled for each run */
   pqcEnabled: boolean;
+  /** Type of simulation: 'web' or 'blockchain' */
+  scanType: string;
+  /**
+   * Blockchain chain identifier
+   * @nullable
+   */
+  chainId: string | null;
+  /**
+   * Wallet or smart contract address
+   * @nullable
+   */
+  targetAddress: string | null;
   /** @nullable */
   lastAlertedAt: string | null;
   /**
@@ -305,6 +388,8 @@ export interface SimulationRun {
   completedAt: string | null;
   /** Post-quantum TLS security scan result, or null for older runs */
   quantumScanResult?: QuantumScanResult | null;
+  /** Blockchain account info for blockchain simulation runs, or null otherwise */
+  blockchainScanResult?: BlockchainAccountInfo | null;
 }
 
 export interface SimulationRunDetail {
@@ -330,6 +415,8 @@ export interface SimulationRunDetail {
   stepResults: StepResult[];
   /** Post-quantum TLS security scan result, or null for older runs */
   quantumScanResult?: QuantumScanResult | null;
+  /** Blockchain account info for blockchain simulation runs, or null otherwise */
+  blockchainScanResult?: BlockchainAccountInfo | null;
 }
 
 export interface SimulationStats {

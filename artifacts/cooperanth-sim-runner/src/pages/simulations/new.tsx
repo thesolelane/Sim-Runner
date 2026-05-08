@@ -39,15 +39,29 @@ import {
   CheckCircle2,
   Info,
   ShieldAlert,
+  Link2,
+  Wallet,
+  Globe,
+  ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import type {
   DetectedStep,
   FlowStep,
+  BlockchainAccountInfo,
 } from "@workspace/api-client-react";
 
 const ACTION_TYPES = ["fill", "click", "navigate", "waitForText", "selectOption", "consent", "confirmation"];
+
+const SUPPORTED_CHAINS = [
+  { id: "solana", name: "Solana" },
+  { id: "ethereum", name: "Ethereum" },
+  { id: "base", name: "Base" },
+  { id: "arbitrum", name: "Arbitrum One" },
+  { id: "monad", name: "Monad Testnet" },
+];
 
 interface EditableStep {
   order: number;
@@ -83,6 +97,97 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
   );
 }
 
+function BlockchainAccountCard({ info }: { info: BlockchainAccountInfo }) {
+  const accountTypeLabel =
+    info.accountType === "contract"
+      ? "Smart Contract"
+      : info.accountType === "wallet"
+      ? "Wallet"
+      : "Unknown";
+
+  return (
+    <div className="space-y-4">
+      {info.error && (
+        <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2.5">
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>Could not reach RPC endpoint: {info.error}. Account info may be incomplete.</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="space-y-1 col-span-2">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Address</div>
+          <div className="font-mono text-xs break-all bg-muted px-2 py-1.5 rounded">{info.address}</div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Chain</div>
+          <div className="font-medium">{info.chainName}</div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Account Type</div>
+          <Badge
+            variant="outline"
+            className={
+              info.accountType === "contract"
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : info.accountType === "wallet"
+                ? "border-green-200 bg-green-50 text-green-700"
+                : "border-muted"
+            }
+          >
+            {accountTypeLabel}
+          </Badge>
+        </div>
+        {info.balance && (
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Balance</div>
+            <div className="font-mono text-sm">{info.balance}</div>
+          </div>
+        )}
+        {info.dataSize !== null && (
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Bytecode Size</div>
+            <div className="font-mono text-sm">{info.dataSize.toLocaleString()} bytes</div>
+          </div>
+        )}
+        {info.owner && (
+          <div className="space-y-1 col-span-2">
+            <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Owner Program</div>
+            <div className="font-mono text-xs break-all bg-muted px-2 py-1 rounded">{info.owner}</div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-md border p-3 bg-muted/30">
+        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+          Quantum Readiness — {info.quantumRoadmap.status}
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">{info.quantumRoadmap.details}</p>
+        {info.quantumRoadmap.reference && (
+          <a
+            href={info.quantumRoadmap.reference}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1.5"
+          >
+            Learn more <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+
+      <a
+        href={info.explorerUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+        View on block explorer
+      </a>
+    </div>
+  );
+}
+
 export default function NewSimulation() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -90,10 +195,16 @@ export default function NewSimulation() {
 
   const [step, setStep] = useState(1);
 
+  const [scanType, setScanType] = useState<"web" | "blockchain">("web");
+
   const [url, setUrl] = useState("");
   const [appName, setAppName] = useState("");
   const [simName, setSimName] = useState("");
   const [pqcEnabled, setPqcEnabled] = useState(false);
+
+  const [chainId, setChainId] = useState("ethereum");
+  const [address, setAddress] = useState("");
+  const [blockchainResult, setBlockchainResult] = useState<BlockchainAccountInfo | null>(null);
 
   const scanUrlMutation = useScanUrl();
   const [editableSteps, setEditableSteps] = useState<EditableStep[]>([]);
@@ -114,6 +225,35 @@ export default function NewSimulation() {
   });
 
   const handleScan = () => {
+    if (scanType === "blockchain") {
+      if (!appName || !address) {
+        toast({
+          title: "Missing fields",
+          description: "Please provide an app name and wallet/contract address.",
+          variant: "destructive",
+        });
+        return;
+      }
+      scanUrlMutation.mutate(
+        { data: { appName, scanType: "blockchain", chainId, address } as Parameters<typeof scanUrlMutation.mutate>[0]["data"] },
+        {
+          onSuccess: (data) => {
+            setBlockchainResult((data.blockchainResult as BlockchainAccountInfo) ?? null);
+            if (!simName) setSimName(`${appName} — ${SUPPORTED_CHAINS.find(c => c.id === chainId)?.name ?? chainId}`);
+            setStep(2);
+          },
+          onError: () => {
+            toast({
+              title: "Lookup Failed",
+              description: "Could not look up the address on-chain.",
+              variant: "destructive",
+            });
+          },
+        },
+      );
+      return;
+    }
+
     if (!url || !appName) {
       toast({
         title: "Missing fields",
@@ -202,6 +342,39 @@ export default function NewSimulation() {
       return;
     }
 
+    if (scanType === "blockchain") {
+      if (!blockchainResult) {
+        toast({ title: "Error", description: "Blockchain scan result missing.", variant: "destructive" });
+        return;
+      }
+      createSimMutation.mutate(
+        {
+          data: {
+            name: simName,
+            appName,
+            appUrl: address,
+            appType: "blockchain",
+            steps: [],
+            scanType: "blockchain",
+            chainId,
+            targetAddress: address,
+          } as Parameters<typeof createSimMutation.mutate>[0]["data"],
+        },
+        {
+          onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey() });
+            queryClient.invalidateQueries({ queryKey: getGetSimulationStatsQueryKey() });
+            toast({ title: "Simulation Created", description: "Blockchain simulation saved." });
+            setLocation(`/simulations/${data.id}`);
+          },
+          onError: () => {
+            toast({ title: "Error", description: "Failed to create simulation.", variant: "destructive" });
+          },
+        },
+      );
+      return;
+    }
+
     const payloadSteps: FlowStep[] = editableSteps.map((s) => ({
       order: s.order,
       name: s.name,
@@ -245,7 +418,7 @@ export default function NewSimulation() {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Create Simulation</h1>
-        <p className="text-muted-foreground mt-1">Scan a target app and build a simulation flow.</p>
+        <p className="text-muted-foreground mt-1">Scan a target app or blockchain address and build a simulation.</p>
       </div>
 
       <div className="flex items-center gap-4 mb-8">
@@ -272,60 +445,164 @@ export default function NewSimulation() {
         <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <CardHeader>
             <CardTitle>Target Configuration</CardTitle>
-            <CardDescription>Enter the details of the app you want to test.</CardDescription>
+            <CardDescription>Choose your scan type and configure the target.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setScanType("web")}
+                className={`flex items-center gap-3 rounded-lg border-2 p-4 text-left transition-all ${
+                  scanType === "web"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-muted-foreground/30"
+                }`}
+              >
+                <Globe className={`h-5 w-5 ${scanType === "web" ? "text-primary" : "text-muted-foreground"}`} />
+                <div>
+                  <div className="font-semibold text-sm">Web App</div>
+                  <div className="text-xs text-muted-foreground">Playwright onboarding flow scan</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setScanType("blockchain")}
+                className={`flex items-center gap-3 rounded-lg border-2 p-4 text-left transition-all ${
+                  scanType === "blockchain"
+                    ? "border-primary bg-primary/5"
+                    : "border-muted hover:border-muted-foreground/30"
+                }`}
+              >
+                <Wallet className={`h-5 w-5 ${scanType === "blockchain" ? "text-primary" : "text-muted-foreground"}`} />
+                <div>
+                  <div className="font-semibold text-sm">Wallet / Smart Contract</div>
+                  <div className="text-xs text-muted-foreground">On-chain account monitor</div>
+                </div>
+              </button>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="appName">App Name</Label>
               <Input
                 id="appName"
-                placeholder="e.g. Acme Corp"
+                placeholder={scanType === "blockchain" ? "e.g. Uniswap V3 Pool" : "e.g. Acme Corp"}
                 value={appName}
                 onChange={(e) => setAppName(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="url">Start URL</Label>
-              <Input
-                id="url"
-                placeholder="https://app.example.com/signup"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-            </div>
-            <div className="flex items-start justify-between rounded-lg border p-3 bg-muted/30">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="h-4 w-4 mt-0.5 text-purple-600 shrink-0" />
-                <div>
-                  <Label htmlFor="pqc-toggle" className="text-sm font-medium cursor-pointer">
-                    Post-Quantum Check
-                  </Label>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Inspect the target URL's TLS handshake for quantum-vulnerable algorithms on each run.
-                  </p>
+
+            {scanType === "web" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="url">Start URL</Label>
+                  <Input
+                    id="url"
+                    placeholder="https://app.example.com/signup"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                  />
                 </div>
-              </div>
-              <Switch
-                id="pqc-toggle"
-                checked={pqcEnabled}
-                onCheckedChange={setPqcEnabled}
-              />
-            </div>
+                <div className="flex items-start justify-between rounded-lg border p-3 bg-muted/30">
+                  <div className="flex items-start gap-3">
+                    <ShieldAlert className="h-4 w-4 mt-0.5 text-purple-600 shrink-0" />
+                    <div>
+                      <Label htmlFor="pqc-toggle" className="text-sm font-medium cursor-pointer">
+                        Post-Quantum Check
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Inspect the target URL's TLS handshake for quantum-vulnerable algorithms on each run.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="pqc-toggle"
+                    checked={pqcEnabled}
+                    onCheckedChange={setPqcEnabled}
+                  />
+                </div>
+              </>
+            )}
+
+            {scanType === "blockchain" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="chain">Chain</Label>
+                  <Select value={chainId} onValueChange={setChainId}>
+                    <SelectTrigger id="chain">
+                      <SelectValue placeholder="Select chain…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUPPORTED_CHAINS.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address">Wallet / Contract Address</Label>
+                  <Input
+                    id="address"
+                    placeholder={chainId === "solana" ? "e.g. 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" : "e.g. 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="rounded-md bg-blue-50 border border-blue-100 p-3 text-xs text-blue-700 flex items-start gap-2">
+                  <Link2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    Uses public RPC endpoints only. Balance, bytecode presence, and quantum roadmap data are fetched without authentication or paid APIs.
+                  </span>
+                </div>
+              </>
+            )}
           </CardContent>
           <CardFooter className="justify-end border-t p-4 bg-muted/20">
             <Button onClick={handleScan} disabled={scanUrlMutation.isPending}>
               {scanUrlMutation.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : scanType === "blockchain" ? (
+                <Wallet className="mr-2 h-4 w-4" />
               ) : (
                 <Search className="mr-2 h-4 w-4" />
               )}
-              {scanUrlMutation.isPending ? "Scanning with Playwright…" : "Scan Application"}
+              {scanUrlMutation.isPending
+                ? scanType === "blockchain" ? "Looking up address…" : "Scanning with Playwright…"
+                : scanType === "blockchain" ? "Look Up Address" : "Scan Application"}
             </Button>
           </CardFooter>
         </Card>
       )}
 
-      {step === 2 && (
+      {step === 2 && scanType === "blockchain" && blockchainResult && (
+        <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" />
+              On-Chain Account Info
+            </CardTitle>
+            <CardDescription>
+              Review the account details. Each run will re-query this address to detect changes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BlockchainAccountCard info={blockchainResult} />
+          </CardContent>
+          <CardFooter className="justify-between border-t p-4 bg-muted/20">
+            <Button variant="ghost" onClick={() => setStep(1)}>
+              Back
+            </Button>
+            <Button onClick={() => setStep(3)}>
+              Continue to Save
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+
+      {step === 2 && scanType === "web" && (
         <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
@@ -524,18 +801,28 @@ export default function NewSimulation() {
                 <LayoutTemplate className="h-4 w-4" />
                 Summary
               </h4>
-              <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside ml-4">
-                <li>
-                  Targeting: {appName} ({url})
-                </li>
-                <li>Steps to simulate: {editableSteps.length}</li>
-                {lowConfidenceCount > 0 && (
-                  <li className="text-yellow-600">
-                    {lowConfidenceCount} low-confidence step{lowConfidenceCount > 1 ? "s" : ""} — review
-                    recommended
+              {scanType === "blockchain" ? (
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside ml-4">
+                  <li>Type: Blockchain ({SUPPORTED_CHAINS.find(c => c.id === chainId)?.name ?? chainId})</li>
+                  <li className="font-mono text-xs break-all">Address: {address}</li>
+                  {blockchainResult?.accountType && (
+                    <li>Account type: {blockchainResult.accountType}</li>
+                  )}
+                </ul>
+              ) : (
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside ml-4">
+                  <li>
+                    Targeting: {appName} ({url})
                   </li>
-                )}
-              </ul>
+                  <li>Steps to simulate: {editableSteps.length}</li>
+                  {lowConfidenceCount > 0 && (
+                    <li className="text-yellow-600">
+                      {lowConfidenceCount} low-confidence step{lowConfidenceCount > 1 ? "s" : ""} — review
+                      recommended
+                    </li>
+                  )}
+                </ul>
+              )}
             </div>
           </CardContent>
           <CardFooter className="justify-between border-t p-4 bg-muted/20">

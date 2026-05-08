@@ -22,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert } from "lucide-react";
+import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert, Wallet, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -255,33 +255,72 @@ export default function SimulationDetail() {
         <TabsContent value="overview" className="mt-4">
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-5 w-5" />
-                    Simulation Steps
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="relative border-l-2 border-muted ml-3 pl-6 space-y-6">
-                    {simulation.steps.map((step) => (
-                      <div key={step.order} className="relative">
-                        <div className="absolute -left-[31px] top-1 h-3 w-3 rounded-full bg-border" />
-                        <div>
-                          <h4 className="font-semibold text-sm mb-1">{step.order}. {step.name}</h4>
-                          <p className="text-sm text-muted-foreground mb-2">{step.description}</p>
-                          <div className="flex gap-2 flex-wrap">
-                            <Badge variant="secondary" className="text-xs bg-muted/50">{step.stepType}</Badge>
-                            {step.fields.map(f => (
-                              <span key={f} className="text-xs font-mono bg-muted px-2 py-0.5 rounded text-muted-foreground">{f}</span>
-                            ))}
+              {simulation.scanType === "blockchain" ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Wallet className="h-5 w-5 text-primary" />
+                      Blockchain Target
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Chain</div>
+                        <div className="font-semibold capitalize">{simulation.chainId}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">App Type</div>
+                        <Badge variant="secondary">{simulation.appType}</Badge>
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Address</div>
+                        <div className="font-mono text-xs break-all bg-muted px-3 py-2 rounded">{simulation.targetAddress}</div>
+                      </div>
+                    </div>
+                    <a
+                      href={`https://${simulation.chainId === "solana" ? "solscan.io/account" : simulation.chainId === "base" ? "basescan.org/address" : simulation.chainId === "arbitrum" ? "arbiscan.io/address" : simulation.chainId === "monad" ? "testnet.monadexplorer.com/address" : "etherscan.io/address"}/${simulation.targetAddress}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View on block explorer
+                    </a>
+                    <div className="rounded-md bg-muted/30 border p-3 text-xs text-muted-foreground">
+                      Each run queries the address on-chain and records the current balance, bytecode presence, and other state. Run the simulation to start collecting data.
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity className="h-5 w-5" />
+                      Simulation Steps
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="relative border-l-2 border-muted ml-3 pl-6 space-y-6">
+                      {simulation.steps.map((step) => (
+                        <div key={step.order} className="relative">
+                          <div className="absolute -left-[31px] top-1 h-3 w-3 rounded-full bg-border" />
+                          <div>
+                            <h4 className="font-semibold text-sm mb-1">{step.order}. {step.name}</h4>
+                            <p className="text-sm text-muted-foreground mb-2">{step.description}</p>
+                            <div className="flex gap-2 flex-wrap">
+                              <Badge variant="secondary" className="text-xs bg-muted/50">{step.stepType}</Badge>
+                              {step.fields.map(f => (
+                                <span key={f} className="text-xs font-mono bg-muted px-2 py-0.5 rounded text-muted-foreground">{f}</span>
+                              ))}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             <div className="space-y-6">
