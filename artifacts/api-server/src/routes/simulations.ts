@@ -17,6 +17,7 @@ import {
 } from "@workspace/api-zod";
 import { CronExpressionParser } from "cron-parser";
 import { runSimulation, NIX_LIB_PATHS } from "../lib/engine";
+import { runStoreReadinessScan } from "../lib/store-readiness";
 import { registerSchedule, unregisterSchedule } from "../lib/scheduling";
 import { checkAndSendAlert, checkAndSendQuantumAlert, sendTestAlert } from "../lib/alerting";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -577,6 +578,91 @@ async function detectStepsFromUrl(url: string, appName: string) {
             ? candidateSelectors
             : [`input[name="company"]`, `input[placeholder*="company" i]`],
         actionType: "fill",
+      });
+    }
+
+    const hasCommentKeywords = ["comment", "reply", "discussion", "respond"].some(kw => pageText.includes(kw));
+    const hasLikeKeywords = ["like", "heart", "react", "reaction", "upvote"].some(kw => pageText.includes(kw));
+    const hasFollowKeywords = ["follow", "subscribe", "unfollow"].some(kw => pageText.includes(kw));
+    const hasMsgKeywords = ["message", " dm ", "direct message", "chat", "inbox"].some(kw => pageText.includes(kw));
+    const hasNotifKeywords = ["notification", "notifications", "alerts"].some(kw => pageText.includes(kw));
+    const textareaEls = elements.filter(e => e.tag === "textarea");
+    const commentBtns = buttons.filter(e => /\b(post|comment|reply|send)\b/i.test(e.text ?? "") || /\b(post|comment|reply)\b/i.test(e.ariaLabel ?? ""));
+    const likeBtns = buttons.filter(e => /\b(like|heart|react|upvote)\b/i.test(e.text ?? "") || /\b(like|heart|react)\b/i.test(e.ariaLabel ?? ""));
+    const followBtns = buttons.filter(e => /\bfollow\b|\bsubscribe\b/i.test(e.text ?? "") || /\bfollow\b/i.test(e.ariaLabel ?? ""));
+    const msgBtns = buttons.filter(e => /\b(message|dm|chat)\b/i.test(e.text ?? "") || /\b(message|dm)\b/i.test(e.ariaLabel ?? ""));
+
+    if (hasCommentKeywords || (textareaEls.length > 0 && commentBtns.length > 0)) {
+      const commentCandidates = [...textareaEls.map(e => buildSelector(e)), ...commentBtns.map(e => buildSelector(e))];
+      detected.push({
+        order: order++,
+        name: "Comment on Post",
+        description: "User writes and submits a comment or reply",
+        fields: ["Comment Text"],
+        stepType: "comment",
+        confidence: scoreConfidence((hasCommentKeywords ? 2 : 0) + (textareaEls.length > 0 ? 2 : 0) + (commentBtns.length > 0 ? 1 : 0), 5),
+        selector: commentCandidates[0] ?? `textarea`,
+        candidateSelectors: commentCandidates.length > 0 ? commentCandidates : [`textarea`, `[contenteditable="true"]`],
+        actionType: "comment",
+      });
+    }
+
+    if (hasLikeKeywords || likeBtns.length > 0) {
+      const likeCandidates = likeBtns.map(e => buildSelector(e));
+      detected.push({
+        order: order++,
+        name: "Like Content",
+        description: "User likes or reacts to a post or content item",
+        fields: [],
+        stepType: "like",
+        confidence: scoreConfidence((hasLikeKeywords ? 1 : 0) + (likeBtns.length > 0 ? 2 : 0), 3),
+        selector: likeCandidates[0] ?? `button[aria-label*="like" i]`,
+        candidateSelectors: likeCandidates.length > 0 ? likeCandidates : [`button[aria-label*="like" i]`, `button:has-text("Like")`],
+        actionType: "like",
+      });
+    }
+
+    if (hasFollowKeywords || followBtns.length > 0) {
+      const followCandidates = followBtns.map(e => buildSelector(e));
+      detected.push({
+        order: order++,
+        name: "Follow / Subscribe",
+        description: "User follows another user or subscribes to content",
+        fields: [],
+        stepType: "follow",
+        confidence: scoreConfidence((hasFollowKeywords ? 1 : 0) + (followBtns.length > 0 ? 2 : 0), 3),
+        selector: followCandidates[0] ?? `button:has-text("Follow")`,
+        candidateSelectors: followCandidates.length > 0 ? followCandidates : [`button:has-text("Follow")`, `button[aria-label*="follow" i]`],
+        actionType: "follow",
+      });
+    }
+
+    if (hasMsgKeywords || msgBtns.length > 0) {
+      const msgCandidates = msgBtns.map(e => buildSelector(e));
+      detected.push({
+        order: order++,
+        name: "Send Direct Message",
+        description: "User sends a direct message or initiates a chat",
+        fields: ["Message"],
+        stepType: "message",
+        confidence: scoreConfidence((hasMsgKeywords ? 1 : 0) + (msgBtns.length > 0 ? 2 : 0), 3),
+        selector: msgCandidates[0] ?? `button:has-text("Message")`,
+        candidateSelectors: msgCandidates.length > 0 ? msgCandidates : [`button:has-text("Message")`, `a[href*="/messages"]`],
+        actionType: "message",
+      });
+    }
+
+    if (hasNotifKeywords) {
+      detected.push({
+        order: order++,
+        name: "View Notifications",
+        description: "User opens the notifications panel to see alerts and activity",
+        fields: [],
+        stepType: "notification",
+        confidence: "medium" as ConfidenceLevel,
+        selector: `[aria-label*="notification" i]`,
+        candidateSelectors: [`[aria-label*="notification" i]`, `button[aria-label*="notif" i]`, `[href*="notification"]`],
+        actionType: "notification",
       });
     }
 
@@ -1226,6 +1312,7 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
 
   const bodyParsed = CreateRunBody.safeParse(req.body ?? {});
   const headedMode = bodyParsed.success ? (bodyParsed.data.headedMode ?? false) : false;
+  const skipQuantum = bodyParsed.success ? (bodyParsed.data.skipQuantum ?? false) : false;
 
   const [simulation] = await db
     .select()
@@ -1274,6 +1361,7 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
   let videoPath: string | null = null;
   let blockchainScanResult = null;
   let quantumScanResult = null;
+  let securityFindings: Array<{ category: string; check: string; status: "pass" | "fail" | "warning"; severity: "info" | "low" | "medium" | "high" | "critical"; detail: string; recommendation: string; }> | null = null;
 
   if (isBlockchain) {
     logger.info({ simulationId: id, chainId: simulation.chainId, address: simulation.targetAddress }, "Starting blockchain scan");
@@ -1290,6 +1378,7 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
         timeoutMs: 15000,
       });
       stepResults = runResult.stepResults;
+      securityFindings = runResult.securityFindings;
       if (runResult.videoPath) {
         videoPath = await uploadVideoToStorage(runResult.videoPath);
       }
@@ -1308,7 +1397,7 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
       }));
     }
 
-    if (simulation.pqcEnabled) {
+    if (simulation.pqcEnabled && !skipQuantum) {
       try {
         quantumScanResult = await scanQuantumSecurity(simulation.appUrl);
         logger.info(
@@ -1342,6 +1431,7 @@ router.post("/simulations/:id/runs", async (req, res): Promise<void> => {
       stepResults: isBlockchain ? [] : stepResults,
       quantumScanResult,
       blockchainScanResult,
+      securityFindings: isBlockchain ? null : (securityFindings ?? null),
       completedAt: new Date(),
     })
     .returning();
@@ -1505,6 +1595,22 @@ router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void>
     res.setHeader("Content-Length", fileSize);
     fs.createReadStream(run.videoPath).pipe(res);
   }
+});
+
+router.post("/store-readiness/scan", async (req, res) => {
+  const { url, platforms, appName } = req.body ?? {};
+  if (!url || typeof url !== "string" || !platforms || !Array.isArray(platforms) || platforms.length === 0) {
+    res.status(400).json({ error: "url (string) and platforms (non-empty array) are required" });
+    return;
+  }
+  const scanUrlError = validateScanUrl(url);
+  if (scanUrlError) {
+    res.status(400).json({ error: `Invalid URL: ${scanUrlError}` });
+    return;
+  }
+  req.log.info({ url, platforms }, "Starting store readiness scan");
+  const report = await runStoreReadinessScan(url, platforms as string[], typeof appName === "string" ? appName : undefined);
+  res.json(report);
 });
 
 export default router;

@@ -50,6 +50,14 @@ export const simulationRunsTable = pgTable("simulation_runs", {
     scannedAt: string;
     error: string | null;
   }>(),
+  securityFindings: jsonb("security_findings").$type<Array<{
+    category: string;
+    check: string;
+    status: "pass" | "fail" | "warning";
+    severity: "info" | "low" | "medium" | "high" | "critical";
+    detail: string;
+    recommendation: string;
+  }>>(),
   quantumScanResult: jsonb("quantum_scan_result").$type<{
     quantumSafe: boolean;
     tlsVersion: string | null;

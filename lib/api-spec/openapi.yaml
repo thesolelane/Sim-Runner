@@ -16,6 +16,8 @@ tags:
     description: Simulation run execution and results
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: tools
+    description: Standalone analysis tools (store readiness, etc.)
 paths:
   /healthz:
     get:
@@ -323,6 +325,32 @@ paths:
                 $ref: "#/components/schemas/SimulationRunDetail"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /store-readiness/scan:
+    post:
+      operationId: runStoreReadinessScan
+      tags: [tools]
+      summary: Scan a URL for App Store and Google Play readiness
+      description: "Checks a live URL against Apple App Store and Google Play Store submission requirements and returns a scored readiness report."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreReadinessScanBody"
+      responses:
+        "200":
+          description: Store readiness report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreReadinessReport"
+        "400":
+          description: Invalid request
           content:
             application/json:
               schema:
@@ -758,6 +786,9 @@ components:
         headedMode:
           type: boolean
           description: "Run in headed mode and record a video"
+        skipQuantum:
+          type: boolean
+          description: "Override simulation-level PQC setting and skip quantum scan for this run"
 
     Simulation:
       type: object
@@ -935,6 +966,11 @@ components:
           description: "Blockchain account info for blockchain simulation runs, or null otherwise"
           allOf:
             - $ref: "#/components/schemas/BlockchainAccountInfo"
+        securityFindings:
+          type: array
+          description: "OWASP-aligned passive security findings collected during the run"
+          items:
+            $ref: "#/components/schemas/SecurityFinding"
       required:
         - id
         - simulationId
@@ -947,6 +983,35 @@ components:
         - videoPath
         - startedAt
         - completedAt
+
+    SecurityFinding:
+      type: object
+      properties:
+        category:
+          type: string
+          description: "OWASP category (e.g. 'Security Headers', 'Session Management', 'Privacy & Compliance')"
+        check:
+          type: string
+          description: "Specific check performed"
+        status:
+          type: string
+          enum: [pass, fail, warning]
+        severity:
+          type: string
+          enum: [info, low, medium, high, critical]
+        detail:
+          type: string
+          description: "Human-readable description of the finding"
+        recommendation:
+          type: string
+          description: "How to fix the issue"
+      required:
+        - category
+        - check
+        - status
+        - severity
+        - detail
+        - recommendation
 
     QuantumFinding:
       type: object
@@ -1059,6 +1124,11 @@ components:
             - $ref: "#/components/schemas/BlockchainAccountInfo"
             - type: "null"
           description: "Blockchain account info for blockchain simulation runs, or null otherwise"
+        securityFindings:
+          type: array
+          description: "OWASP-aligned passive security findings collected during the run"
+          items:
+            $ref: "#/components/schemas/SecurityFinding"
       required:
         - id
         - simulationId
@@ -1095,3 +1165,106 @@ components:
         - passRate
         - avgDurationMs
         - recentRuns
+
+    StoreReadinessScanBody:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "The live URL of the application to scan"
+        platforms:
+          type: array
+          items:
+            type: string
+            enum: [ios, android]
+          description: "Target platforms to evaluate against"
+        appName:
+          type: string
+          description: "Name of the application"
+      required:
+        - url
+        - platforms
+
+    StoreReadinessCheck:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [pass, fail, warning, not_applicable]
+        severity:
+          type: string
+          enum: [critical, high, medium, low, info]
+        detail:
+          type: string
+        recommendation:
+          type: ["string", "null"]
+      required:
+        - id
+        - name
+        - description
+        - status
+        - severity
+        - detail
+        - recommendation
+
+    StoreReadinessCategory:
+      type: object
+      properties:
+        name:
+          type: string
+        score:
+          type: number
+          description: "0.0 to 1.0 score for this category"
+        platform:
+          type: ["string", "null"]
+          description: "Platform this applies to: 'ios', 'android', or null for both"
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreReadinessCheck"
+      required:
+        - name
+        - score
+        - platform
+        - checks
+
+    StoreReadinessReport:
+      type: object
+      properties:
+        url:
+          type: string
+        platforms:
+          type: array
+          items:
+            type: string
+        overallScore:
+          type: number
+          description: "0.0 to 1.0 overall readiness score"
+        readyForSubmission:
+          type: boolean
+          description: "True when no critical issues found and score >= 0.7"
+        scannedAt:
+          type: string
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreReadinessCategory"
+        criticalIssues:
+          type: integer
+        error:
+          type: ["string", "null"]
+      required:
+        - url
+        - platforms
+        - overallScore
+        - readyForSubmission
+        - scannedAt
+        - categories
+        - criticalIssues
+        - error

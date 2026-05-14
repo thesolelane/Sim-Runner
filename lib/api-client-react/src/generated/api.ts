@@ -30,6 +30,8 @@ import type {
   SimulationRun,
   SimulationRunDetail,
   SimulationStats,
+  StoreReadinessReport,
+  StoreReadinessScanBody,
   TestAlertBody,
   TestAlertResponse,
   UpdateSimulationBody,
@@ -1121,6 +1123,94 @@ export function useGetRun<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Checks a live URL against Apple App Store and Google Play Store submission requirements and returns a scored readiness report.
+ * @summary Scan a URL for App Store and Google Play readiness
+ */
+export const getRunStoreReadinessScanUrl = () => {
+  return `/api/store-readiness/scan`;
+};
+
+export const runStoreReadinessScan = async (
+  storeReadinessScanBody: StoreReadinessScanBody,
+  options?: RequestInit,
+): Promise<StoreReadinessReport> => {
+  return customFetch<StoreReadinessReport>(getRunStoreReadinessScanUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(storeReadinessScanBody),
+  });
+};
+
+export const getRunStoreReadinessScanMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runStoreReadinessScan>>,
+    TError,
+    { data: BodyType<StoreReadinessScanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runStoreReadinessScan>>,
+  TError,
+  { data: BodyType<StoreReadinessScanBody> },
+  TContext
+> => {
+  const mutationKey = ["runStoreReadinessScan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runStoreReadinessScan>>,
+    { data: BodyType<StoreReadinessScanBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return runStoreReadinessScan(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunStoreReadinessScanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runStoreReadinessScan>>
+>;
+export type RunStoreReadinessScanMutationBody =
+  BodyType<StoreReadinessScanBody>;
+export type RunStoreReadinessScanMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Scan a URL for App Store and Google Play readiness
+ */
+export const useRunStoreReadinessScan = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runStoreReadinessScan>>,
+    TError,
+    { data: BodyType<StoreReadinessScanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runStoreReadinessScan>>,
+  TError,
+  { data: BodyType<StoreReadinessScanBody> },
+  TContext
+> => {
+  return useMutation(getRunStoreReadinessScanMutationOptions(options));
+};
 
 /**
  * Returns a presigned GCS URL for direct upload. The client sends JSON

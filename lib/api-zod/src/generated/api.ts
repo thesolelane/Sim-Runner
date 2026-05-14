@@ -353,6 +353,27 @@ export const GetSimulationStatsResponse = zod.object({
         .describe(
           "Blockchain account info for blockchain simulation runs, or null otherwise",
         ),
+      securityFindings: zod
+        .array(
+          zod.object({
+            category: zod
+              .string()
+              .describe(
+                "OWASP category (e.g. 'Security Headers', 'Session Management', 'Privacy & Compliance')",
+              ),
+            check: zod.string().describe("Specific check performed"),
+            status: zod.enum(["pass", "fail", "warning"]),
+            severity: zod.enum(["info", "low", "medium", "high", "critical"]),
+            detail: zod
+              .string()
+              .describe("Human-readable description of the finding"),
+            recommendation: zod.string().describe("How to fix the issue"),
+          }),
+        )
+        .optional()
+        .describe(
+          "OWASP-aligned passive security findings collected during the run",
+        ),
     }),
   ),
 });
@@ -930,6 +951,27 @@ export const ListRunsResponseItem = zod.object({
     .describe(
       "Blockchain account info for blockchain simulation runs, or null otherwise",
     ),
+  securityFindings: zod
+    .array(
+      zod.object({
+        category: zod
+          .string()
+          .describe(
+            "OWASP category (e.g. 'Security Headers', 'Session Management', 'Privacy & Compliance')",
+          ),
+        check: zod.string().describe("Specific check performed"),
+        status: zod.enum(["pass", "fail", "warning"]),
+        severity: zod.enum(["info", "low", "medium", "high", "critical"]),
+        detail: zod
+          .string()
+          .describe("Human-readable description of the finding"),
+        recommendation: zod.string().describe("How to fix the issue"),
+      }),
+    )
+    .optional()
+    .describe(
+      "OWASP-aligned passive security findings collected during the run",
+    ),
 });
 export const ListRunsResponse = zod.array(ListRunsResponseItem);
 
@@ -945,6 +987,12 @@ export const CreateRunBody = zod.object({
     .boolean()
     .optional()
     .describe("Run in headed mode and record a video"),
+  skipQuantum: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Override simulation-level PQC setting and skip quantum scan for this run",
+    ),
 });
 
 /**
@@ -1132,6 +1180,74 @@ export const GetRunResponse = zod.object({
     .describe(
       "Blockchain account info for blockchain simulation runs, or null otherwise",
     ),
+  securityFindings: zod
+    .array(
+      zod.object({
+        category: zod
+          .string()
+          .describe(
+            "OWASP category (e.g. 'Security Headers', 'Session Management', 'Privacy & Compliance')",
+          ),
+        check: zod.string().describe("Specific check performed"),
+        status: zod.enum(["pass", "fail", "warning"]),
+        severity: zod.enum(["info", "low", "medium", "high", "critical"]),
+        detail: zod
+          .string()
+          .describe("Human-readable description of the finding"),
+        recommendation: zod.string().describe("How to fix the issue"),
+      }),
+    )
+    .optional()
+    .describe(
+      "OWASP-aligned passive security findings collected during the run",
+    ),
+});
+
+/**
+ * Checks a live URL against Apple App Store and Google Play Store submission requirements and returns a scored readiness report.
+ * @summary Scan a URL for App Store and Google Play readiness
+ */
+export const RunStoreReadinessScanBody = zod.object({
+  url: zod.string().describe("The live URL of the application to scan"),
+  platforms: zod
+    .array(zod.enum(["ios", "android"]))
+    .describe("Target platforms to evaluate against"),
+  appName: zod.string().optional().describe("Name of the application"),
+});
+
+export const RunStoreReadinessScanResponse = zod.object({
+  url: zod.string(),
+  platforms: zod.array(zod.string()),
+  overallScore: zod.number().describe("0.0 to 1.0 overall readiness score"),
+  readyForSubmission: zod
+    .boolean()
+    .describe("True when no critical issues found and score >= 0.7"),
+  scannedAt: zod.string(),
+  categories: zod.array(
+    zod.object({
+      name: zod.string(),
+      score: zod.number().describe("0.0 to 1.0 score for this category"),
+      platform: zod
+        .string()
+        .nullable()
+        .describe(
+          "Platform this applies to: 'ios', 'android', or null for both",
+        ),
+      checks: zod.array(
+        zod.object({
+          id: zod.string(),
+          name: zod.string(),
+          description: zod.string(),
+          status: zod.enum(["pass", "fail", "warning", "not_applicable"]),
+          severity: zod.enum(["critical", "high", "medium", "low", "info"]),
+          detail: zod.string(),
+          recommendation: zod.string().nullable(),
+        }),
+      ),
+    }),
+  ),
+  criticalIssues: zod.number(),
+  error: zod.string().nullable(),
 });
 
 /**

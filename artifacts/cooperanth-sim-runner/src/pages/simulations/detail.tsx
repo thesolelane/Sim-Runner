@@ -24,7 +24,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert, ShieldCheck, ShieldX, TrendingUp, TrendingDown, Minus, Wallet, ExternalLink } from "lucide-react";
+import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert, ShieldCheck, ShieldX, ShieldOff, TrendingUp, TrendingDown, Minus, Wallet, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -301,6 +301,7 @@ export default function SimulationDetail() {
   });
 
   const [headedMode, setHeadedMode] = useState(false);
+  const [skipQuantum, setSkipQuantum] = useState(false);
   const [copied, setCopied] = useState(false);
   const [testAlertStatus, setTestAlertStatus] = useState<"idle" | "success" | "error">("idle");
   const createRunMutation = useCreateRun();
@@ -340,7 +341,7 @@ export default function SimulationDetail() {
 
   const handleRun = () => {
     createRunMutation.mutate(
-      { id: simId, data: { headedMode } },
+      { id: simId, data: { headedMode, skipQuantum } },
       {
         onSuccess: () => {
           toast({ title: "Simulation Started", description: "A new run has been queued." });
@@ -490,6 +491,17 @@ export default function SimulationDetail() {
             <Label htmlFor="headed-mode" className="text-sm flex items-center gap-1.5 cursor-pointer select-none">
               <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
               Record Video
+            </Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="skip-quantum"
+              checked={skipQuantum}
+              onCheckedChange={setSkipQuantum}
+            />
+            <Label htmlFor="skip-quantum" className="text-sm flex items-center gap-1.5 cursor-pointer select-none">
+              <ShieldOff className="h-3.5 w-3.5 text-muted-foreground" />
+              Skip Quantum
             </Label>
           </div>
           <Button size="lg" onClick={handleRun} disabled={createRunMutation.isPending} className="font-semibold shadow-md hover:shadow-lg transition-all">

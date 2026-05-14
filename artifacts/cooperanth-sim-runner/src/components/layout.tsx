@@ -8,6 +8,7 @@ import {
   Settings,
   ScanLine,
   ShieldAlert,
+  Store,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -31,6 +32,7 @@ const navSections = [
     items: [
       { href: "/scanner", label: "URL Scanner", icon: ScanLine },
       { href: "/quantum-scanner", label: "Quantum Scanner", icon: ShieldAlert },
+      { href: "/store-readiness", label: "Store Readiness", icon: Store },
       { href: "/settings", label: "Settings", icon: Settings },
     ],
   },

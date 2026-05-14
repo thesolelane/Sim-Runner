@@ -302,6 +302,8 @@ export interface UpdateSimulationBody {
 export interface CreateRunBody {
   /** Run in headed mode and record a video */
   headedMode?: boolean;
+  /** Override simulation-level PQC setting and skip quantum scan for this run */
+  skipQuantum?: boolean;
 }
 
 /**
@@ -409,6 +411,39 @@ export interface StepResult {
   actionTaken?: string | null;
 }
 
+export type SecurityFindingStatus =
+  (typeof SecurityFindingStatus)[keyof typeof SecurityFindingStatus];
+
+export const SecurityFindingStatus = {
+  pass: "pass",
+  fail: "fail",
+  warning: "warning",
+} as const;
+
+export type SecurityFindingSeverity =
+  (typeof SecurityFindingSeverity)[keyof typeof SecurityFindingSeverity];
+
+export const SecurityFindingSeverity = {
+  info: "info",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
+export interface SecurityFinding {
+  /** OWASP category (e.g. 'Security Headers', 'Session Management', 'Privacy & Compliance') */
+  category: string;
+  /** Specific check performed */
+  check: string;
+  status: SecurityFindingStatus;
+  severity: SecurityFindingSeverity;
+  /** Human-readable description of the finding */
+  detail: string;
+  /** How to fix the issue */
+  recommendation: string;
+}
+
 export interface SimulationRun {
   id: number;
   simulationId: number;
@@ -428,6 +463,8 @@ export interface SimulationRun {
   quantumScanResult?: QuantumScanResult | null;
   /** Blockchain account info for blockchain simulation runs, or null otherwise */
   blockchainScanResult?: BlockchainAccountInfo | null;
+  /** OWASP-aligned passive security findings collected during the run */
+  securityFindings?: SecurityFinding[];
 }
 
 export interface SimulationRunDetail {
@@ -455,6 +492,8 @@ export interface SimulationRunDetail {
   quantumScanResult?: QuantumScanResult | null;
   /** Blockchain account info for blockchain simulation runs, or null otherwise */
   blockchainScanResult?: BlockchainAccountInfo | null;
+  /** OWASP-aligned passive security findings collected during the run */
+  securityFindings?: SecurityFinding[];
 }
 
 export interface SimulationStats {
@@ -464,4 +503,79 @@ export interface SimulationStats {
   /** @nullable */
   avgDurationMs: number | null;
   recentRuns: SimulationRun[];
+}
+
+export type StoreReadinessScanBodyPlatformsItem =
+  (typeof StoreReadinessScanBodyPlatformsItem)[keyof typeof StoreReadinessScanBodyPlatformsItem];
+
+export const StoreReadinessScanBodyPlatformsItem = {
+  ios: "ios",
+  android: "android",
+} as const;
+
+export interface StoreReadinessScanBody {
+  /** The live URL of the application to scan */
+  url: string;
+  /** Target platforms to evaluate against */
+  platforms: StoreReadinessScanBodyPlatformsItem[];
+  /** Name of the application */
+  appName?: string;
+}
+
+export type StoreReadinessCheckStatus =
+  (typeof StoreReadinessCheckStatus)[keyof typeof StoreReadinessCheckStatus];
+
+export const StoreReadinessCheckStatus = {
+  pass: "pass",
+  fail: "fail",
+  warning: "warning",
+  not_applicable: "not_applicable",
+} as const;
+
+export type StoreReadinessCheckSeverity =
+  (typeof StoreReadinessCheckSeverity)[keyof typeof StoreReadinessCheckSeverity];
+
+export const StoreReadinessCheckSeverity = {
+  critical: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+  info: "info",
+} as const;
+
+export interface StoreReadinessCheck {
+  id: string;
+  name: string;
+  description: string;
+  status: StoreReadinessCheckStatus;
+  severity: StoreReadinessCheckSeverity;
+  detail: string;
+  /** @nullable */
+  recommendation: string | null;
+}
+
+export interface StoreReadinessCategory {
+  name: string;
+  /** 0.0 to 1.0 score for this category */
+  score: number;
+  /**
+   * Platform this applies to: 'ios', 'android', or null for both
+   * @nullable
+   */
+  platform: string | null;
+  checks: StoreReadinessCheck[];
+}
+
+export interface StoreReadinessReport {
+  url: string;
+  platforms: string[];
+  /** 0.0 to 1.0 overall readiness score */
+  overallScore: number;
+  /** True when no critical issues found and score >= 0.7 */
+  readyForSubmission: boolean;
+  scannedAt: string;
+  categories: StoreReadinessCategory[];
+  criticalIssues: number;
+  /** @nullable */
+  error: string | null;
 }
