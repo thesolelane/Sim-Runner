@@ -300,6 +300,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /simulations/{id}/batch-run:
+    post:
+      operationId: createBatchRun
+      tags: [runs]
+      summary: Start N simulation runs with unique synthetic users
+      description: Fires off the given count of runs in the background, each with a distinct synthetic user (different name and email). Quantum scan and alerts are automatically skipped to keep batches fast.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchRunBody"
+      responses:
+        "202":
+          description: Batch accepted and runs queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchRunResponse"
+        "404":
+          description: Simulation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /simulations/{id}/runs/{runId}:
     get:
       operationId: getRun
@@ -789,6 +821,36 @@ components:
         skipQuantum:
           type: boolean
           description: "Override simulation-level PQC setting and skip quantum scan for this run"
+
+    BatchRunBody:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          maximum: 200
+          description: "Number of synthetic-user runs to execute (1-200)"
+        concurrency:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: "How many runs to execute in parallel (1-5, default 2)"
+
+    BatchRunResponse:
+      type: object
+      required: [batchId, simulationId, count, concurrency, message]
+      properties:
+        batchId:
+          type: string
+        simulationId:
+          type: integer
+        count:
+          type: integer
+        concurrency:
+          type: integer
+        message:
+          type: string
 
     Simulation:
       type: object

@@ -17,6 +17,8 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  BatchRunBody,
+  BatchRunResponse,
   CreateRunBody,
   CreateSimulationBody,
   ErrorResponse,
@@ -1044,6 +1046,94 @@ export const useCreateRun = <
   TContext
 > => {
   return useMutation(getCreateRunMutationOptions(options));
+};
+
+/**
+ * Fires off the given count of runs in the background, each with a distinct synthetic user (different name and email). Quantum scan and alerts are automatically skipped to keep batches fast.
+ * @summary Start N simulation runs with unique synthetic users
+ */
+export const getCreateBatchRunUrl = (id: number) => {
+  return `/api/simulations/${id}/batch-run`;
+};
+
+export const createBatchRun = async (
+  id: number,
+  batchRunBody: BatchRunBody,
+  options?: RequestInit,
+): Promise<BatchRunResponse> => {
+  return customFetch<BatchRunResponse>(getCreateBatchRunUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(batchRunBody),
+  });
+};
+
+export const getCreateBatchRunMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBatchRun>>,
+    TError,
+    { id: number; data: BodyType<BatchRunBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createBatchRun>>,
+  TError,
+  { id: number; data: BodyType<BatchRunBody> },
+  TContext
+> => {
+  const mutationKey = ["createBatchRun"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createBatchRun>>,
+    { id: number; data: BodyType<BatchRunBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createBatchRun(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateBatchRunMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBatchRun>>
+>;
+export type CreateBatchRunMutationBody = BodyType<BatchRunBody>;
+export type CreateBatchRunMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Start N simulation runs with unique synthetic users
+ */
+export const useCreateBatchRun = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBatchRun>>,
+    TError,
+    { id: number; data: BodyType<BatchRunBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createBatchRun>>,
+  TError,
+  { id: number; data: BodyType<BatchRunBody> },
+  TContext
+> => {
+  return useMutation(getCreateBatchRunMutationOptions(options));
 };
 
 /**

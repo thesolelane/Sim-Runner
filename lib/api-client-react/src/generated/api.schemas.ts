@@ -306,6 +306,29 @@ export interface CreateRunBody {
   skipQuantum?: boolean;
 }
 
+export interface BatchRunBody {
+  /**
+   * Number of synthetic-user runs to execute (1-200)
+   * @minimum 1
+   * @maximum 200
+   */
+  count: number;
+  /**
+   * How many runs to execute in parallel (1-5, default 2)
+   * @minimum 1
+   * @maximum 5
+   */
+  concurrency?: number;
+}
+
+export interface BatchRunResponse {
+  batchId: string;
+  simulationId: number;
+  count: number;
+  concurrency: number;
+  message: string;
+}
+
 /**
  * Simulation summary returned in list responses. The webhook token is omitted for security.
  */

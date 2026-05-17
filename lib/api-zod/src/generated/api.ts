@@ -996,6 +996,32 @@ export const CreateRunBody = zod.object({
 });
 
 /**
+ * Fires off the given count of runs in the background, each with a distinct synthetic user (different name and email). Quantum scan and alerts are automatically skipped to keep batches fast.
+ * @summary Start N simulation runs with unique synthetic users
+ */
+export const CreateBatchRunParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const createBatchRunBodyCountMax = 200;
+
+export const createBatchRunBodyConcurrencyMax = 5;
+
+export const CreateBatchRunBody = zod.object({
+  count: zod
+    .number()
+    .min(1)
+    .max(createBatchRunBodyCountMax)
+    .describe("Number of synthetic-user runs to execute (1-200)"),
+  concurrency: zod
+    .number()
+    .min(1)
+    .max(createBatchRunBodyConcurrencyMax)
+    .optional()
+    .describe("How many runs to execute in parallel (1-5, default 2)"),
+});
+
+/**
  * @summary Get a specific run with step results
  */
 export const GetRunParams = zod.object({

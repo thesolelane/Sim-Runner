@@ -59,6 +59,7 @@ export interface SecurityFinding {
 export interface RunOptions {
   headedMode?: boolean;
   timeoutMs?: number;
+  userSeed?: number;
 }
 
 export interface RunResult {
@@ -67,18 +68,28 @@ export interface RunResult {
   securityFindings: SecurityFinding[];
 }
 
-function generateTestValue(field: string): string {
+const FIRST_NAMES = ["Alex","Jordan","Taylor","Morgan","Casey","Riley","Sam","Quinn","Avery","Jamie","Drew","Cameron","Reese","Skyler","Parker","Hayden","Rowan","Emerson","Finley","Sage","Blake","Charlie","Dakota","Ellis","Frankie","Gray","Harper","Indigo","Jules","Kai","Lane","Marlowe","Nico","Oakley","Phoenix","Quincy","Remy","Sasha","Toby","Val","Wren","Zion","Aspen","Brooke","Corey","Devon","Eden","Faye","Greer"];
+const LAST_NAMES = ["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Wilson","Anderson","Thomas","Moore","Jackson","Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores","Green","Adams","Nelson","Baker","Hall","Rivera","Campbell","Mitchell","Carter","Roberts","Gomez","Phillips"];
+const CITIES = ["New York","Brooklyn","Boston","Austin","Seattle","Denver","Chicago","Portland","Miami","Atlanta","Dallas","Phoenix","Minneapolis","Nashville","Raleigh"];
+
+function generateTestValue(field: string, userSeed?: number): string {
+  const seed = userSeed ?? Date.now();
   const f = field.toLowerCase();
-  if (f.includes("email")) return `testuser_${Date.now()}@example.com`;
+  const first = FIRST_NAMES[seed % FIRST_NAMES.length] ?? "Alex";
+  const last = LAST_NAMES[Math.floor(seed / FIRST_NAMES.length) % LAST_NAMES.length] ?? "Simrunner";
+  if (f.includes("email")) return `${first.toLowerCase()}.${last.toLowerCase()}.${seed}@example.com`;
   if (f.includes("password")) return "Sim@12345!";
-  if (f.includes("first") && f.includes("name")) return "Alex";
-  if (f.includes("last") && f.includes("name")) return "Simrunner";
-  if (f.includes("name")) return "Alex Simrunner";
-  if (f.includes("phone")) return "+15550001234";
-  if (f.includes("username")) return `user_${Date.now()}`;
+  if (f.includes("first") && f.includes("name")) return first;
+  if (f.includes("last") && f.includes("name")) return last;
+  if (f.includes("name")) return `${first} ${last}`;
+  if (f.includes("phone")) {
+    const last7 = String(seed).slice(-7).padStart(7, "0");
+    return `+1555${last7}`;
+  }
+  if (f.includes("username")) return `${first.toLowerCase()}_${seed}`;
   if (f.includes("zip") || f.includes("postal")) return "10001";
-  if (f.includes("city")) return "New York";
-  if (f.includes("address")) return "123 Test Street";
+  if (f.includes("city")) return CITIES[seed % CITIES.length] ?? "New York";
+  if (f.includes("address")) return `${(seed % 9000) + 100} Test Street`;
   if (f.includes("dob") || f.includes("birth")) return "01/15/1990";
   return `test_${field}`;
 }
@@ -96,13 +107,14 @@ async function executeStep(
   page: Page,
   step: EngineStep,
   stepTimeout: number,
+  userSeed?: number,
 ): Promise<Omit<StepExecutionResult, "stepOrder" | "stepName" | "durationMs">> {
   const actionType = step.actionType || deriveActionType(step);
   const selector = step.selector;
   const generatedData: Record<string, unknown> = {};
 
   for (const field of step.fields) {
-    generatedData[field] = generateTestValue(field);
+    generatedData[field] = generateTestValue(field, userSeed);
   }
 
   try {
@@ -239,7 +251,7 @@ async function executeStep(
 
       case "selectOption": {
         if (selector) {
-          const values = step.fields.map((f) => generateTestValue(f));
+          const values = step.fields.map((f) => generateTestValue(f, userSeed));
           try {
             await page.selectOption(selector, values[0] ?? "1", { timeout: stepTimeout });
           } catch {
@@ -617,7 +629,7 @@ export async function runSimulation(
       }
 
       const stepStart = Date.now();
-      const result = await executeStep(page, step, timeoutMs);
+      const result = await executeStep(page, step, timeoutMs, options.userSeed);
       const durationMs = Date.now() - stepStart;
 
       results.push({

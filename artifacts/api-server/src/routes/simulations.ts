@@ -1597,6 +1597,142 @@ router.get("/simulations/:id/runs/:runId/video", async (req, res): Promise<void>
   }
 });
 
+router.post("/simulations/:id/batch-run", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid simulation ID" });
+    return;
+  }
+
+  const body = req.body ?? {};
+  const count = typeof body.count === "number" ? Math.floor(body.count) : NaN;
+  const concurrency = typeof body.concurrency === "number" ? Math.floor(body.concurrency) : 2;
+  if (!Number.isFinite(count) || count < 1 || count > 200) {
+    res.status(400).json({ error: "count must be an integer between 1 and 200" });
+    return;
+  }
+  if (concurrency < 1 || concurrency > 5) {
+    res.status(400).json({ error: "concurrency must be an integer between 1 and 5" });
+    return;
+  }
+
+  const [simulation] = await db
+    .select()
+    .from(simulationsTable)
+    .where(eq(simulationsTable.id, id));
+
+  if (!simulation) {
+    res.status(404).json({ error: "Simulation not found" });
+    return;
+  }
+
+  if (simulation.scanType === "blockchain") {
+    res.status(400).json({ error: "Batch runs are only supported for web simulations" });
+    return;
+  }
+
+  const urlErr = validateScanUrl(simulation.appUrl);
+  if (urlErr) {
+    res.status(400).json({ error: `Cannot run batch: ${urlErr}` });
+    return;
+  }
+
+  const steps = simulation.steps as Array<{
+    order: number; name: string; description: string; fields: string[];
+    stepType: string; selector?: string; actionType?: string; confidence?: string;
+  }>;
+
+  const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  req.log.info({ simulationId: id, batchId, count, concurrency }, "Batch run accepted");
+
+  res.status(202).json({
+    batchId,
+    simulationId: id,
+    count,
+    concurrency,
+    message: `Queued ${count} synthetic-user run(s) at concurrency ${concurrency}. Runs will appear in the simulation's run history as they complete.`,
+  });
+
+  // Fire-and-forget background batch processor
+  void (async () => {
+   try {
+    const baseSeed = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+    let nextIndex = 0;
+    let lastStatus: string | null = null;
+    const workers = Array.from({ length: concurrency }, async (_, workerIdx) => {
+      while (true) {
+        const i = nextIndex++;
+        if (i >= count) return;
+        const userSeed = baseSeed + i;
+        const runStart = Date.now();
+        let stepResults: Array<{
+          stepOrder: number; stepName: string; status: string; durationMs: number;
+          generatedData: Record<string, unknown>; errorMessage: string | null;
+          screenshot: string | null; selectorUsed: string | null; actionTaken: string | null;
+        }> = [];
+        let securityFindings: Array<{ category: string; check: string; status: "pass" | "fail" | "warning"; severity: "info" | "low" | "medium" | "high" | "critical"; detail: string; recommendation: string; }> | null = null;
+        try {
+          const runResult = await runSimulation(simulation.appUrl, steps, {
+            headedMode: false,
+            timeoutMs: 15000,
+            userSeed,
+          });
+          stepResults = runResult.stepResults;
+          securityFindings = runResult.securityFindings;
+        } catch (err) {
+          logger.error({ err, simulationId: id, batchId, userIndex: i }, "Batch engine run failed");
+          stepResults = steps.map((step) => ({
+            stepOrder: step.order, stepName: step.name, status: "failed", durationMs: 0,
+            generatedData: {}, errorMessage: `Engine error: ${err instanceof Error ? err.message : String(err)}`,
+            screenshot: null, selectorUsed: null, actionTaken: null,
+          }));
+        }
+        const passedSteps = stepResults.filter(s => s.status === "passed").length;
+        const failedSteps = stepResults.filter(s => s.status === "failed").length;
+        const overallStatus = failedSteps === 0 ? "passed" : passedSteps === 0 ? "failed" : "partial";
+        const totalDuration = Date.now() - runStart;
+        try {
+          await db.insert(simulationRunsTable).values({
+            simulationId: id,
+            status: overallStatus,
+            totalSteps: steps.length,
+            passedSteps,
+            failedSteps,
+            durationMs: totalDuration,
+            headedMode: false,
+            videoPath: null,
+            stepResults,
+            quantumScanResult: null,
+            blockchainScanResult: null,
+            securityFindings: securityFindings ?? null,
+            completedAt: new Date(),
+          });
+        } catch (dbErr) {
+          logger.error({ err: dbErr, simulationId: id, batchId, userIndex: i }, "Batch run DB write failed");
+        }
+        lastStatus = overallStatus;
+        logger.info({ simulationId: id, batchId, userIndex: i, workerIdx, overallStatus }, "Batch run complete");
+      }
+    });
+    await Promise.all(workers);
+    // Single aggregate update to simulations row to avoid per-run lock contention
+    try {
+      await db.update(simulationsTable).set({
+        totalRuns: sql`${simulationsTable.totalRuns} + ${count}`,
+        lastRunStatus: lastStatus ?? simulation.lastRunStatus,
+        lastRunAt: new Date(),
+      }).where(eq(simulationsTable.id, id));
+    } catch (dbErr) {
+      logger.error({ err: dbErr, simulationId: id, batchId }, "Batch aggregate update failed");
+    }
+    logger.info({ simulationId: id, batchId, count }, "Batch fully complete");
+   } catch (fatalErr) {
+    logger.error({ err: fatalErr, simulationId: id, batchId }, "Batch processor fatal error");
+   }
+  })();
+});
+
 router.post("/store-readiness/scan", async (req, res) => {
   const { url, platforms, appName } = req.body ?? {};
   if (!url || typeof url !== "string" || !platforms || !Array.isArray(platforms) || platforms.length === 0) {

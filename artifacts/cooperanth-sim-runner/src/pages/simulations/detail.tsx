@@ -4,6 +4,7 @@ import {
   useGetSimulation, 
   useListRuns, 
   useCreateRun,
+  useCreateBatchRun,
   useUpdateSimulation,
   useTestAlert,
   getGetSimulationQueryKey,
@@ -13,6 +14,7 @@ import {
   type SimulationRun,
   type QuantumScanResult,
 } from "@workspace/api-client-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,7 +26,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert, ShieldCheck, ShieldX, ShieldOff, TrendingUp, TrendingDown, Minus, Wallet, ExternalLink } from "lucide-react";
+import { Loader2, Play, Activity, Clock, ArrowLeft, History, Monitor, Settings, Bell, Webhook, Copy, Check, Send, XCircle, ShieldAlert, ShieldCheck, ShieldX, ShieldOff, TrendingUp, TrendingDown, Minus, Wallet, ExternalLink, Users } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -304,7 +306,11 @@ export default function SimulationDetail() {
   const [skipQuantum, setSkipQuantum] = useState(false);
   const [copied, setCopied] = useState(false);
   const [testAlertStatus, setTestAlertStatus] = useState<"idle" | "success" | "error">("idle");
+  const [batchCount, setBatchCount] = useState(50);
+  const [batchConcurrency, setBatchConcurrency] = useState(2);
+  const [batchOpen, setBatchOpen] = useState(false);
   const createRunMutation = useCreateRun();
+  const createBatchRunMutation = useCreateBatchRun();
   const updateSimMutation = useUpdateSimulation();
   const testAlertMutation = useTestAlert();
 
@@ -504,6 +510,65 @@ export default function SimulationDetail() {
               Skip Quantum
             </Label>
           </div>
+          <Popover open={batchOpen} onOpenChange={setBatchOpen}>
+            <PopoverTrigger asChild>
+              <Button size="lg" variant="outline" disabled={createBatchRunMutation.isPending} className="font-semibold">
+                {createBatchRunMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Users className="mr-2 h-5 w-5" />}
+                Batch Run
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-3">
+                <div>
+                  <h4 className="font-semibold text-sm">Batch Run — Synthetic Users</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">Each run will use a unique name + email. Quantum scan and alerts are skipped automatically.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="batch-count" className="text-xs">Number of users (1–200)</Label>
+                  <Input
+                    id="batch-count"
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={batchCount}
+                    onChange={e => setBatchCount(Math.max(1, Math.min(200, parseInt(e.target.value) || 1)))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="batch-concurrency" className="text-xs">Parallel runs (1–5)</Label>
+                  <Input
+                    id="batch-concurrency"
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={batchConcurrency}
+                    onChange={e => setBatchConcurrency(Math.max(1, Math.min(5, parseInt(e.target.value) || 1)))}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Higher = faster but more memory. Estimated time: ~{Math.ceil((batchCount * 30) / batchConcurrency / 60)} min.</p>
+                </div>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  disabled={createBatchRunMutation.isPending}
+                  onClick={() => {
+                    createBatchRunMutation.mutate(
+                      { id: simId, data: { count: batchCount, concurrency: batchConcurrency } },
+                      {
+                        onSuccess: (data) => {
+                          toast({ title: "Batch Started", description: data.message });
+                          setBatchOpen(false);
+                          setTimeout(() => queryClient.invalidateQueries({ queryKey: getListRunsQueryKey(simId) }), 1500);
+                        },
+                        onError: () => toast({ title: "Batch Failed", description: "Could not start batch run.", variant: "destructive" }),
+                      }
+                    );
+                  }}
+                >
+                  {createBatchRunMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Starting…</> : <><Users className="mr-2 h-4 w-4" />Start {batchCount} runs</>}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button size="lg" onClick={handleRun} disabled={createRunMutation.isPending} className="font-semibold shadow-md hover:shadow-lg transition-all">
             {createRunMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Play className="mr-2 h-5 w-5" />}
             Run Simulation
