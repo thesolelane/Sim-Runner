@@ -1675,7 +1675,7 @@ router.post("/simulations/:id/batch-run", async (req, res): Promise<void> => {
         try {
           const runResult = await runSimulation(simulation.appUrl, steps, {
             headedMode: false,
-            timeoutMs: 15000,
+            timeoutMs: 45000,
             userSeed,
           });
           stepResults = runResult.stepResults;
