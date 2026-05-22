@@ -77,7 +77,17 @@ function generateTestValue(field: string, userSeed?: number): string {
   const f = field.toLowerCase();
   const first = FIRST_NAMES[seed % FIRST_NAMES.length] ?? "Alex";
   const last = LAST_NAMES[Math.floor(seed / FIRST_NAMES.length) % LAST_NAMES.length] ?? "Simrunner";
-  if (f.includes("email")) return `${first.toLowerCase()}.${last.toLowerCase()}.${seed}@example.com`;
+  if (f.includes("email")) {
+    const base = process.env.SIM_EMAIL_BASE ?? "trumpoly2025@gmail.com";
+    const at = base.indexOf("@");
+    if (at > 0) {
+      const local = base.slice(0, at);
+      const domain = base.slice(at + 1);
+      const tag = `sim${String(seed).padStart(3, "0").slice(-6)}`;
+      return `${local}+${tag}@${domain}`;
+    }
+    return `${first.toLowerCase()}.${last.toLowerCase()}.${seed}@example.com`;
+  }
   if (f.includes("password")) return "Sim@12345!";
   if (f.includes("first") && f.includes("name")) return first;
   if (f.includes("last") && f.includes("name")) return last;
