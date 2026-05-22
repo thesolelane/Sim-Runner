@@ -37,3 +37,8 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+SIM_WEBHOOK_SECRET = "simtid09hiabco43068136508109867093dtebOlm"
