@@ -88,7 +88,7 @@ function generateTestValue(field: string, userSeed?: number): string {
     }
     return `${first.toLowerCase()}.${last.toLowerCase()}.${seed}@example.com`;
   }
-  if (f.includes("password")) return "Sim@12345!";
+  if (f.includes("password")) return `Trayd-${seed}-Aa1!`;
   if (f.includes("first") && f.includes("name")) return first;
   if (f.includes("last") && f.includes("name")) return last;
   if (f.includes("name")) return `${first} ${last}`;
@@ -159,15 +159,32 @@ async function executeStep(
         }
         for (const field of step.fields) {
           const value = generatedData[field] as string;
+          const fieldLower = field.toLowerCase();
+          const isConfirmPassword = fieldLower.includes("password") && (fieldLower.includes("confirm") || fieldLower.includes("repeat") || fieldLower.includes("verify"));
+          const isPassword = fieldLower.includes("password") && !isConfirmPassword;
+          const isEmail = fieldLower.includes("email");
+
+          if (isConfirmPassword) {
+            try {
+              await page.locator('input[type="password"]').nth(1).fill(value, { timeout: stepTimeout });
+              continue;
+            } catch { /* fall through to attribute-based selectors */ }
+          }
+          if (isPassword && step.fields.length > 1) {
+            try {
+              await page.locator('input[type="password"]').nth(0).fill(value, { timeout: stepTimeout });
+              continue;
+            } catch { /* fall through */ }
+          }
+
           try {
-            const fieldLower = field.toLowerCase();
             let fieldSelector = selector;
             if (step.fields.length > 1) {
-              if (fieldLower.includes("password") && fieldLower.includes("confirm")) {
-                fieldSelector = `input[type="password"]:nth-of-type(2), input[name*="confirm"], input[id*="confirm"]`;
-              } else if (fieldLower.includes("password")) {
-                fieldSelector = `input[type="password"]:first-of-type, input[name="password"], input[id="password"]`;
-              } else if (fieldLower.includes("email")) {
+              if (isConfirmPassword) {
+                fieldSelector = `input[name*="confirm" i], input[id*="confirm" i], input[placeholder*="confirm" i], input[placeholder*="repeat" i], input[placeholder*="verify" i]`;
+              } else if (isPassword) {
+                fieldSelector = `input[type="password"], input[name="password"], input[id="password"]`;
+              } else if (isEmail) {
                 fieldSelector = `input[type="email"], input[name="email"], input[id="email"]`;
               }
             }
