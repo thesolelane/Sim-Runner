@@ -1,5 +1,7 @@
 {pkgs}: {
   deps = [
+    pkgs.libgbm
+    pkgs.at-spi2-core
     pkgs.libxkbcommon
     pkgs.udev
     pkgs.cairo
