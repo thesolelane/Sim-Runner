@@ -1,0 +1,124 @@
+PAGE 1 — /signup
+Title: "Create your account"
+
+Selector: button.account-type-card          (click to select)
+  Text options:
+    "Contractor / Tradesperson"
+    "Investor / Developer"
+    "Real Estate Agent"
+    "Homeowner"
+→ Click the card for "Contractor / Tradesperson"
+Selector: button.btn-primary.btn-full       text: "Continue"
+→ Click → navigates to /signup/trade-select
+
+PAGE 2 — /signup/trade-select
+Title: "What's your trade?"
+
+Selector: button (trade buttons, 23 total)
+  Examples: "Electrician", "Plumber", "HVAC", "Carpenter", etc.
+→ Click one trade button
+Selector: button:has-text("Continue as")
+→ Click → navigates to /signup/contractor
+  (trade is passed via React Router location.state as preselectedTrade)
+
+PAGE 3 — /signup/contractor · STEP 1 of 3
+Subtitle: "Step 1 of 3 · Account credentials"
+
+input[type="email"]
+  placeholder: "you@example.com"
+  required: yes
+input[type="password"]  (first one)
+  placeholder: "Min. 8 characters"
+  minLength: 8
+  required: yes
+input[type="password"]  (second one)
+  placeholder: "Repeat password"
+  required: yes
+button[type="submit"]   text: "Continue"
+→ Click → Supabase auth.signUp() fires, user created in auth
+  Page stays at /signup/contractor, advances to step 2
+
+PAGE 3 — /signup/contractor · STEP 2 of 3
+Subtitle: "Step 2 of 3 · Professional info"
+
+input[type="text"]
+  label: "Full Name"
+  placeholder: "Mike Rivera"
+  required: yes
+input[type="text"]
+  label: "Username (handle)"
+  placeholder: "@yourhandle"  (auto-slugifies from display name)
+  required: no  ← can leave blank, slugified from display name
+select
+  label: "Primary Trade"
+  required: yes
+  ⚠ pre-filled if trade was selected on /signup/trade-select
+  option values match trade button text exactly (e.g. "Electrician")
+input[type="number"]
+  label: "Years of Experience"
+  placeholder: "e.g. 12"
+  min: 0, max: 60
+  required: no
+input[type="text"]
+  label: "City"
+  placeholder: "Chicago"
+  required: no
+select
+  label: "State"
+  option values: 2-letter US state codes ("IL", "TX", "CA" etc.)
+  required: no
+button[type="submit"]   text: "Continue"
+→ Click → NO DB write yet, advances to step 3
+
+PAGE 3 — /signup/contractor · STEP 3 of 3
+Subtitle: "Step 3 of 3 · Business details"
+
+input[type="text"]
+  label: "Business Name (optional)"
+  placeholder: "Rivera Electric LLC"
+  required: no
+textarea
+  label: "Bio"
+  placeholder: "Brief intro..."
+  rows: 4
+  required: no
+input[type="file"]
+  label: "Profile Photo (optional)"
+  accept: image/*
+  max: 5MB
+  required: no  ← skip for sim
+input[type="number"]   ← service radius (may not be visible in DOM — check)
+  label: "Service Radius"
+  default value: "50"
+  required: no
+button[type="submit"]   text: "Create Account"
+→ Click → ⚡ THIS IS THE DB WRITE:
+    INSERT into public.users (id, email, display_name, handle, account_type, ...)
+    INSERT into public.contractor_profiles (user_id, primary_trade, ...)
+  → navigates to /wallet-setup
+
+PAGE 4 — /wallet-setup
+Title: "Your TraydBook Wallet is Ready"
+
+(page loads → Solana keypair auto-generated in browser)
+(shows public key + private key fields — read-only display)
+(optional actions: copy / download / email encrypted key — skip for sim)
+button   text: "I've saved my key — continue"
+→ Click → fires POST /api/wallet/save-pubkey  { pubkey: "..." }
+  → navigates to /feed
+  → ✅ USER FULLY ONBOARDED — visible in admin
+
+Summary — minimum sim path
+/signup          → click "Contractor / Tradesperson" → Continue
+/signup/trade-select → click any trade → "Continue as [trade]"
+/signup/contractor step 1 → email + password + confirm → Continue
+/signup/contractor step 2 → full name (required) + trade select (required) → Continue
+/signup/contractor step 3 → (all optional, can submit blank) → "Create Account"
+/wallet-setup    → wait for page load → click "I've saved my key — continue"
+/feed            → ✅ done
+
+The only required fields across all steps:
+
+Email, Password, Confirm Password (step 1)
+Full Name, Primary Trade (step 2)
+Everything on step 3 is optional

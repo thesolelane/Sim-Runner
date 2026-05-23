@@ -99,6 +99,8 @@ function generateTestValue(field: string, userSeed?: number): string {
   if (f.includes("username")) return `${first.toLowerCase()}_${seed}`;
   if (f.includes("zip") || f.includes("postal")) return "10001";
   if (f.includes("city")) return CITIES[seed % CITIES.length] ?? "New York";
+  if (f.includes("state") || f.includes("province") || f.includes("region")) return "CA";
+  if (f.includes("country")) return "US";
   if (f.includes("address")) return `${(seed % 9000) + 100} Test Street`;
   if (f.includes("dob") || f.includes("birth")) return "01/15/1990";
   return `test_${field}`;
