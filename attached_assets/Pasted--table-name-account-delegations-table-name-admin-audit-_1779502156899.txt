@@ -1,0 +1,191 @@
+[
+  {
+    "table_name": "account_delegations"
+  },
+  {
+    "table_name": "admin_audit_log"
+  },
+  {
+    "table_name": "admin_invites"
+  },
+  {
+    "table_name": "agent_logs"
+  },
+  {
+    "table_name": "api_key_rotations"
+  },
+  {
+    "table_name": "availability_windows"
+  },
+  {
+    "table_name": "bids"
+  },
+  {
+    "table_name": "bob_control"
+  },
+  {
+    "table_name": "comments"
+  },
+  {
+    "table_name": "connection_test"
+  },
+  {
+    "table_name": "connections"
+  },
+  {
+    "table_name": "content_moderation_queue"
+  },
+  {
+    "table_name": "content_scores"
+  },
+  {
+    "table_name": "contractor_profiles"
+  },
+  {
+    "table_name": "credentials"
+  },
+  {
+    "table_name": "credit_action_costs"
+  },
+  {
+    "table_name": "credit_bundles"
+  },
+  {
+    "table_name": "credit_ledger"
+  },
+  {
+    "table_name": "credit_transactions"
+  },
+  {
+    "table_name": "delegate_audit_log"
+  },
+  {
+    "table_name": "dwell_events"
+  },
+  {
+    "table_name": "dwell_events_2026_q1"
+  },
+  {
+    "table_name": "dwell_events_2026_q2"
+  },
+  {
+    "table_name": "dwell_events_2026_q3"
+  },
+  {
+    "table_name": "dwell_events_2026_q4"
+  },
+  {
+    "table_name": "dwell_events_2027_q1"
+  },
+  {
+    "table_name": "dwell_events_2027_q2"
+  },
+  {
+    "table_name": "geography_columns"
+  },
+  {
+    "table_name": "geometry_columns"
+  },
+  {
+    "table_name": "interaction_events"
+  },
+  {
+    "table_name": "interaction_events_2026_q1"
+  },
+  {
+    "table_name": "interaction_events_2026_q2"
+  },
+  {
+    "table_name": "interaction_events_2026_q3"
+  },
+  {
+    "table_name": "interaction_events_2026_q4"
+  },
+  {
+    "table_name": "interaction_events_2027_q1"
+  },
+  {
+    "table_name": "interaction_events_2027_q2"
+  },
+  {
+    "table_name": "job_applications"
+  },
+  {
+    "table_name": "job_listings"
+  },
+  {
+    "table_name": "lead_bank_ledger"
+  },
+  {
+    "table_name": "leads"
+  },
+  {
+    "table_name": "messages"
+  },
+  {
+    "table_name": "notifications"
+  },
+  {
+    "table_name": "outreach_prospects"
+  },
+  {
+    "table_name": "passes"
+  },
+  {
+    "table_name": "post_likes"
+  },
+  {
+    "table_name": "posts"
+  },
+  {
+    "table_name": "profile_field_sources"
+  },
+  {
+    "table_name": "projects"
+  },
+  {
+    "table_name": "purchases"
+  },
+  {
+    "table_name": "repair_approvals"
+  },
+  {
+    "table_name": "repair_log"
+  },
+  {
+    "table_name": "reviews"
+  },
+  {
+    "table_name": "rfqs"
+  },
+  {
+    "table_name": "search_events"
+  },
+  {
+    "table_name": "security_events"
+  },
+  {
+    "table_name": "service_api_keys"
+  },
+  {
+    "table_name": "social_connections"
+  },
+  {
+    "table_name": "social_import_log"
+  },
+  {
+    "table_name": "spatial_ref_sys"
+  },
+  {
+    "table_name": "user_affinity_scores"
+  },
+  {
+    "table_name": "users"
+  },
+  {
+    "table_name": "verification_orders"
+  },
+  {
+    "table_name": "waitlist"
+  }
+]
