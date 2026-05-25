@@ -54,3 +54,5 @@ _tmp/
 *.tar.gz
 _tmp/
 *.tar.gz
+_tmp/
+*.tar.gz
